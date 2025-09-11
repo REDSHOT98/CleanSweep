@@ -139,7 +139,7 @@ fun DuplicatesScreen(
     val title = when (uiState.scanState) {
         ScanState.Idle -> "Duplicate Finder"
         ScanState.Scanning, ScanState.Cancelling -> "Scanning..."
-        ScanState.Complete -> "Scan Results"
+        ScanState.Complete -> "Scan Result (${uiState.resultGroups.size} groups)"
     }
     Scaffold(
         topBar = {

@@ -145,7 +145,7 @@ private fun SummarySheetContent(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Review Changes", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            Text(text = "Review Changes (${pendingChanges.size})", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = onToggleViewMode) {
                 Icon(
                     imageVector = when (viewMode) {
