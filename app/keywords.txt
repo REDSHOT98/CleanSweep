@@ -1,0 +1,38 @@
+# A dictionary of keywords for R8/ProGuard to use for obfuscation.
+# Using keywords that are valid in Dalvik/ART but might be reserved
+# in Java or Kotlin can confuse decompilers.
+if
+for
+while
+goto
+switch
+case
+default
+continue
+break
+return
+else
+do
+try
+catch
+finally
+throw
+throws
+new
+class
+interface
+enum
+extends
+implements
+public
+protected
+private
+static
+final
+abstract
+native
+synchronized
+transient
+volatile
+strictfp
+const
