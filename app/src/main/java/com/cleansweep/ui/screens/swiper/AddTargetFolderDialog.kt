@@ -67,6 +67,7 @@ fun AddTargetFolderDialog(
     hintOnExistingFolderName: Boolean,
     allFolderPaths: List<String>,
     currentItemPath: String?,
+    targetFavorites: Set<String>,
     onDismissRequest: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onPathSelected: (String) -> Unit,
@@ -293,15 +294,26 @@ fun AddTargetFolderDialog(
                         .fillMaxWidth()
                         .focusRequester(newFolderNameFocusRequester)
                 )
+
+                val isSelectedFolderFavorite = folderSearchState.browsePath in targetFavorites
+                val isFavoritesRowEnabled = folderSearchState.browsePath != null && !isSelectedFolderFavorite
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { addToFavorites = !addToFavorites }
+                        .clickable(
+                            enabled = isFavoritesRowEnabled,
+                            onClick = { addToFavorites = !addToFavorites }
+                        )
                         .padding(vertical = 4.dp)
                 ) {
-                    Checkbox(checked = addToFavorites, onCheckedChange = { addToFavorites = it })
-                    Text("Add to Target Favorites")
+                    Checkbox(
+                        checked = addToFavorites,
+                        onCheckedChange = { addToFavorites = it },
+                        enabled = isFavoritesRowEnabled
+                    )
+                    Text("Add to Target Favorites", color = if (isFavoritesRowEnabled) LocalContentColor.current else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
@@ -362,4 +374,3 @@ private fun getFormattedPath(fullPath: String): String {
         fullPath.takeLast(40)
     }
 }
-

@@ -789,6 +789,8 @@ class SwiperViewModel @Inject constructor(
 
     fun showAddTargetFolderDialog() {
         folderDialogCollectionJob?.cancel()
+        val currentTargetPaths = _uiState.value.targetFolders.map { it.first }.toSet()
+
         folderDialogCollectionJob = viewModelScope.launch {
             mediaRepository.observeFoldersForTargetDialog().collect { allFolders ->
                 _uiState.update { it.copy(allFolderPathsForDialog = allFolders) }
@@ -796,17 +798,25 @@ class SwiperViewModel @Inject constructor(
                 // Only prepare the search manager if the dialog is already open,
                 // to avoid overwriting the initial cached list.
                 if (_uiState.value.showAddTargetFolderDialog) {
-                    val initialPath = lastUsedTargetPath ?: _uiState.value.defaultCreationPath
-                    folderSearchManager.prepareWithPreFilteredList(allFolders, initialPath = initialPath)
+                    val initialPath = _uiState.value.defaultCreationPath
+                    folderSearchManager.prepareWithPreFilteredList(
+                        folders = allFolders,
+                        initialPath = initialPath,
+                        excludedFolders = currentTargetPaths
+                    )
                 }
             }
         }
 
         // This part runs immediately, without waiting for the flow collection to start.
         viewModelScope.launch {
-            val initialPath = lastUsedTargetPath ?: _uiState.value.defaultCreationPath
             val cachedFolders = mediaRepository.getCachedFolderSnapshot()
-            folderSearchManager.prepareWithPreFilteredList(cachedFolders, initialPath = initialPath)
+            val initialPath = _uiState.value.defaultCreationPath
+            folderSearchManager.prepareWithPreFilteredList(
+                folders = cachedFolders,
+                initialPath = initialPath,
+                excludedFolders = currentTargetPaths
+            )
             _uiState.update { it.copy(showAddTargetFolderDialog = true) }
         }
     }

@@ -123,13 +123,18 @@ class FolderSearchManager @Inject constructor(
         }
     }
 
-    fun prepareWithPreFilteredList(folders: List<Pair<String, String>>, initialPath: String? = null) {
+    fun prepareWithPreFilteredList(
+        folders: List<Pair<String, String>>,
+        initialPath: String? = null,
+        excludedFolders: Set<String> = emptySet()
+    ) {
         folderCollectionJob?.cancel()
-        this.preFilteredList = folders
+        val availableFolders = folders.filterNot { it.first in excludedFolders }
+        this.preFilteredList = availableFolders
         this.allFoldersFromRepo = emptyList()
 
         val initialResults = calculateResults(
-            sourceList = folders,
+            sourceList = availableFolders,
             query = "",
             browsePath = initialPath,
             isPreFiltered = true

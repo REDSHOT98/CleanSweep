@@ -397,6 +397,7 @@ fun SwiperScreen(
                     hintOnExistingFolderName = hintOnExistingFolderName,
                     allFolderPaths = uiState.allFolderPathsForDialog.map { it.first },
                     currentItemPath = uiState.currentItem?.id,
+                    targetFavorites = uiState.targetFavorites,
                     onDismissRequest = viewModel::dismissAddTargetFolderDialog,
                     onSearchQueryChange = viewModel.folderSearchManager::updateSearchQuery,
                     onPathSelected = viewModel::onPathSelected,
