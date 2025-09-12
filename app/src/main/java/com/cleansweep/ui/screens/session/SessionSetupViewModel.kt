@@ -27,7 +27,9 @@ enum class FolderSortOption {
     ALPHABETICAL_ASC,
     ALPHABETICAL_DESC,
     SIZE_ASC,
-    SIZE_DESC
+    SIZE_DESC,
+    ITEM_COUNT_ASC,
+    ITEM_COUNT_DESC
 }
 
 // Define folder category
@@ -106,6 +108,8 @@ class SessionSetupViewModel @Inject constructor(
             )
 
     private var hasInitializedSelection = false
+    private var selectionToPreserve: List<String>? = null
+
 
     companion object {
         private const val TAG = "SessionSetupViewModel"
@@ -182,6 +186,8 @@ class SessionSetupViewModel @Inject constructor(
                         FolderSortOption.ALPHABETICAL_DESC -> compareByDescending { it.bucketName.lowercase() }
                         FolderSortOption.SIZE_ASC -> compareBy { it.totalSize }
                         FolderSortOption.SIZE_DESC -> compareByDescending { it.totalSize }
+                        FolderSortOption.ITEM_COUNT_ASC -> compareBy { it.itemCount }
+                        FolderSortOption.ITEM_COUNT_DESC -> compareByDescending { it.itemCount }
                     }
 
                     category.copy(folders = category.folders.sortedWith(primarySort.then(secondarySort)))
@@ -193,7 +199,9 @@ class SessionSetupViewModel @Inject constructor(
             }.collect { (newCategories, newFavorites, allFolders) ->
                 _uiState.update { currentState ->
                     val allAvailableFolderPaths = allFolders.map { it.path }.toSet()
-                    val sanitizedSelection = currentState.selectedBuckets.filter { it in allAvailableFolderPaths }
+
+                    val selectionSource = selectionToPreserve ?: currentState.selectedBuckets
+                    val sanitizedSelection = selectionSource.filter { it in allAvailableFolderPaths }
 
                     val isStillLoading = allFolders.isEmpty() && currentState.isInitialLoad
 
@@ -246,6 +254,7 @@ class SessionSetupViewModel @Inject constructor(
             }
             Log.d(TAG, "Refreshing folders...")
             val startTime = System.currentTimeMillis()
+            selectionToPreserve = _uiState.value.selectedBuckets
             _uiState.update { it.copy(isRefreshing = true) }
             try {
                 // This manually-triggered refresh still performs a full scan.
@@ -266,6 +275,7 @@ class SessionSetupViewModel @Inject constructor(
                     }
                     Log.d(TAG, "Refresh flow finished. Resetting isRefreshing flag.")
                     _uiState.update { it.copy(isRefreshing = false) }
+                    selectionToPreserve = null // Clear the preserved selection
                 }
             }
         }

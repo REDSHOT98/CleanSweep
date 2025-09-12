@@ -411,6 +411,15 @@ private fun DefaultTopAppBar(
                             if (uiState.currentSortOption == FolderSortOption.ALPHABETICAL_DESC) Icon(Icons.Default.Check, null)
                         })
                     DropdownMenuItem(
+                        text = { Text("Size (Largest first)") },
+                        onClick = {
+                            onSortOptionChange(FolderSortOption.SIZE_DESC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (uiState.currentSortOption == FolderSortOption.SIZE_DESC) Icon(Icons.Default.Check, null)
+                        })
+                    DropdownMenuItem(
                         text = { Text("Size (Smallest first)") },
                         onClick = {
                             onSortOptionChange(FolderSortOption.SIZE_ASC)
@@ -420,13 +429,22 @@ private fun DefaultTopAppBar(
                             if (uiState.currentSortOption == FolderSortOption.SIZE_ASC) Icon(Icons.Default.Check, null)
                         })
                     DropdownMenuItem(
-                        text = { Text("Size (Largest first)") },
+                        text = { Text("Item Count (Most first)") },
                         onClick = {
-                            onSortOptionChange(FolderSortOption.SIZE_DESC)
+                            onSortOptionChange(FolderSortOption.ITEM_COUNT_DESC)
                             showSortMenu = false
                         },
                         leadingIcon = {
-                            if (uiState.currentSortOption == FolderSortOption.SIZE_DESC) Icon(Icons.Default.Check, null)
+                            if (uiState.currentSortOption == FolderSortOption.ITEM_COUNT_DESC) Icon(Icons.Default.Check, null)
+                        })
+                    DropdownMenuItem(
+                        text = { Text("Item Count (Fewest first)") },
+                        onClick = {
+                            onSortOptionChange(FolderSortOption.ITEM_COUNT_ASC)
+                            showSortMenu = false
+                        },
+                        leadingIcon = {
+                            if (uiState.currentSortOption == FolderSortOption.ITEM_COUNT_ASC) Icon(Icons.Default.Check, null)
                         })
                 }
             }
