@@ -189,7 +189,7 @@ class PreferencesRepository @Inject constructor(
 
     val unfavoriteRemovesFromBarFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[PreferencesKeys.UNFAVORITE_REMOVES_FROM_BAR] ?: true
+            preferences[PreferencesKeys.UNFAVORITE_REMOVES_FROM_BAR] ?: false
         }
 
     val processedMediaPathsFlow: Flow<Set<String>> = context.dataStore.data

@@ -1026,12 +1026,20 @@ class SwiperViewModel @Inject constructor(
     fun toggleTargetFavorite(folderPath: String) {
         viewModelScope.launch {
             if (folderPath in _uiState.value.targetFavorites) {
-                val folderName = _uiState.value.folderIdToNameMap[folderPath]
-                if (folderName != null) {
-                    newlyAddedTargetFolders.update { it + (folderPath to folderName) }
-                }
+                // Unfavorite action
                 preferencesRepository.removeTargetFavoriteFolder(folderPath)
+                val shouldRemoveFromBar = preferencesRepository.unfavoriteRemovesFromBarFlow.first()
+                if (shouldRemoveFromBar) {
+                    sessionHiddenTargetFolders.update { it + folderPath }
+                    newlyAddedTargetFolders.update { it - folderPath }
+                } else {
+                    val folderName = _uiState.value.folderIdToNameMap[folderPath]
+                    if (folderName != null) {
+                        newlyAddedTargetFolders.update { it + (folderPath to folderName) }
+                    }
+                }
             } else {
+                // Favorite action
                 sessionHiddenTargetFolders.update { it - folderPath }
                 preferencesRepository.addTargetFavoriteFolder(folderPath)
             }
