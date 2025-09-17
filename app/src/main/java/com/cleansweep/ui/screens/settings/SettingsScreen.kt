@@ -1,6 +1,5 @@
 package com.cleansweep.ui.screens.settings
 
-import android.content.Intent
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,7 +40,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -135,6 +133,10 @@ fun SettingsScreen(
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
+
+    var showAboutSortMediaDialog by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
+
 
     LaunchedEffect(uiState.isSearchActive) {
         if (uiState.isSearchActive) {
@@ -519,8 +521,106 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Help & Support",
                     items = listOf(
-                        SettingItem(keywords = listOf("onboarding tutorial", "replay")) {
-                            HelpAndAboutSections(viewModel, onNavigateToLibraries)
+                        SettingItem(keywords = listOf("onboarding tutorial", "replay", "help")) {
+                            Column {
+                                Text("Onboarding Tutorial", style = MaterialTheme.typography.titleMedium)
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    "Replay the onboarding experience to learn app features.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.resetOnboarding() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Replay Tutorial")
+                                }
+                            }
+                        }
+                    )
+                ),
+                SettingSection(
+                    title = "About",
+                    items = listOf(
+                        SettingItem(keywords = listOf("version", "build")) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onLongPress = {
+                                                viewModel.copyAppVersionToClipboard()
+                                            }
+                                        )
+                                    }
+                            ) {
+                                Text(
+                                    text = "Version",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = viewModel.appVersion,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        SettingItem(keywords = listOf("about cleansweep", "info")) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showAboutSortMediaDialog = true }
+                            ) {
+                                Text(
+                                    text = "About CleanSweep",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Learn more about CleanSweep",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        SettingItem(keywords = listOf("github", "source code")) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { uriHandler.openUri("https://github.com/loopotto/CleanSweep") }
+                            ) {
+                                Text(
+                                    text = "GitHub",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "github.com/loopotto/CleanSweep",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        SettingItem(keywords = listOf("open-source licenses", "libraries")) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(onClick = onNavigateToLibraries)
+                            ) {
+                                Text(
+                                    text = "Open-Source Licenses",
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "View open-source licenses",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     )
                 )
@@ -596,6 +696,20 @@ fun SettingsScreen(
         )
     }
 
+    if (showAboutSortMediaDialog) {
+        AppDialog(
+            onDismissRequest = { showAboutSortMediaDialog = false },
+            title = { Text("About CleanSweep", style = MaterialTheme.typography.headlineSmall) },
+            text = { Text("Version: ${viewModel.appVersion}", style = MaterialTheme.typography.bodyLarge) },
+            buttons = {
+                TextButton(onClick = { showAboutSortMediaDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+
     val missingFolders = uiState.missingImportedFolders
     if (missingFolders != null) {
         AppDialog(
@@ -629,11 +743,11 @@ fun SettingsScreen(
             title = "Select Default Folder",
             searchLabel = "Search or enter path...",
             confirmButtonText = "Select",
-            autoConfirmOnSelection = false, // <-- FIX
+            autoConfirmOnSelection = false,
             onDismiss = viewModel::dismissFolderSearchDialog,
             onQueryChanged = viewModel.folderSearchManager::updateSearchQuery,
             onFolderSelected = viewModel::onPathSelected,
-            onConfirm = viewModel::confirmDefaultPathSelection, // <-- FIX
+            onConfirm = viewModel::confirmDefaultPathSelection,
             onSearch = { scope.launch { viewModel.folderSearchManager.selectSingleResultOrSelf() } },
             formatListItemTitle = { formatPathForDisplay(it) }
         )
@@ -1122,153 +1236,6 @@ private fun ForgetSortedMediaSetting(viewModel: SettingsViewModel) {
         }
     }
 }
-
-@Composable
-private fun ManageFavoritesSetting(viewModel: SettingsViewModel) {
-    Column {
-        Text("Manage Favorites", style = MaterialTheme.typography.titleMedium)
-        Text(
-            "Clear your saved favorite folders.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.clearSourceFavorites() }, modifier = Modifier.weight(1f)) { Text("Reset Source") }
-            OutlinedButton(onClick = { viewModel.clearTargetFavorites() }, modifier = Modifier.weight(1f)) { Text("Reset Target") }
-        }
-    }
-}
-
-
-@Composable
-private fun HelpAndAboutSections(viewModel: SettingsViewModel, onNavigateToLibraries: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-    var showAboutSortMediaDialog by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column {
-            Text("Onboarding Tutorial", style = MaterialTheme.typography.titleMedium)
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "Replay the onboarding experience to learn app features.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { viewModel.resetOnboarding() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Replay Tutorial")
-            }
-        }
-    }
-
-    // This section is now split from Help to allow search to find it correctly
-    // It's still rendered sequentially so the visual appearance is the same.
-    Spacer(modifier = Modifier.height(16.dp))
-    Text(
-        text = "About",
-        style = MaterialTheme.typography.headlineSmall,
-        color = MaterialTheme.colorScheme.primary,
-    )
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onLongPress = {
-                            viewModel.copyAppVersionToClipboard()
-                        }
-                    )
-                }
-        ) {
-            Text(
-                text = "Version",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = viewModel.appVersion,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showAboutSortMediaDialog = true }
-        ) {
-            Text(
-                text = "About CleanSweep",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "Learn more about CleanSweep",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { uriHandler.openUri("https://github.com/loopotto/CleanSweep") }
-        ) {
-            Text(
-                text = "GitHub",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "github.com/loopotto/CleanSweep",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onNavigateToLibraries)
-        ) {
-            Text(
-                text = "Open-Source Licenses",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "View open-source licenses",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-
-    if (showAboutSortMediaDialog) {
-        AppDialog(
-            onDismissRequest = { showAboutSortMediaDialog = false },
-            title = { Text("About CleanSweep", style = MaterialTheme.typography.headlineSmall) },
-            text = { Text("Version: ${viewModel.appVersion}", style = MaterialTheme.typography.bodyLarge) },
-            buttons = {
-                TextButton(onClick = { showAboutSortMediaDialog = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-}
-
 
 private fun getSwipeSensitivityDisplayName(sensitivity: SwipeSensitivity): String {
     return when (sensitivity) {

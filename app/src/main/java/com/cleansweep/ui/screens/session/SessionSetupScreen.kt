@@ -43,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cleansweep.ui.components.AppDialog
 import com.cleansweep.ui.components.AppDropdownMenu
 import com.cleansweep.ui.components.AppMenuDivider
+import com.cleansweep.ui.components.FastScrollbar
 import com.cleansweep.ui.components.FolderSearchDialog
 import com.cleansweep.ui.components.RenameFolderDialog
 import com.cleansweep.ui.theme.AppTheme
@@ -309,60 +310,66 @@ fun SessionSetupScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     val listState = rememberLazyListState()
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = 96.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        uiState.folderCategories.forEach { category ->
-                            if (category.folders.isNotEmpty()) {
-                                item {
-                                    Text(
-                                        text = category.name,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
-                                    )
-                                }
-                                items(category.folders, key = { it.bucketId }) { folderInfo ->
-                                    val isSelectedForSession = folderInfo.bucketId in uiState.selectedBuckets
-                                    val isSelectedForContext = folderInfo.bucketId in uiState.contextSelectedFolderPaths
-                                    EnhancedFolderItem(
-                                        folderInfo = folderInfo,
-                                        isSelected = if (uiState.isContextualSelectionMode) isSelectedForContext else isSelectedForSession,
-                                        isContextualMode = uiState.isContextualSelectionMode,
-                                        isFavorite = folderInfo.bucketId in uiState.favoriteFolders,
-                                        isRecursiveRoot = folderInfo.bucketId in uiState.recursivelySelectedRoots,
-                                        onToggle = {
-                                            if (uiState.isContextualSelectionMode) {
-                                                viewModel.toggleContextualSelection(folderInfo.bucketId)
-                                            } else {
-                                                if (isSelectedForSession) {
-                                                    viewModel.unselectBucket(folderInfo.bucketId)
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 8.dp,
+                                bottom = 96.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            uiState.folderCategories.forEach { category ->
+                                if (category.folders.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            text = category.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+                                        )
+                                    }
+                                    items(category.folders, key = { it.bucketId }) { folderInfo ->
+                                        val isSelectedForSession = folderInfo.bucketId in uiState.selectedBuckets
+                                        val isSelectedForContext = folderInfo.bucketId in uiState.contextSelectedFolderPaths
+                                        EnhancedFolderItem(
+                                            folderInfo = folderInfo,
+                                            isSelected = if (uiState.isContextualSelectionMode) isSelectedForContext else isSelectedForSession,
+                                            isContextualMode = uiState.isContextualSelectionMode,
+                                            isFavorite = folderInfo.bucketId in uiState.favoriteFolders,
+                                            isRecursiveRoot = folderInfo.bucketId in uiState.recursivelySelectedRoots,
+                                            onToggle = {
+                                                if (uiState.isContextualSelectionMode) {
+                                                    viewModel.toggleContextualSelection(folderInfo.bucketId)
                                                 } else {
-                                                    viewModel.selectBucket(folderInfo.bucketId)
+                                                    if (isSelectedForSession) {
+                                                        viewModel.unselectBucket(folderInfo.bucketId)
+                                                    } else {
+                                                        viewModel.selectBucket(folderInfo.bucketId)
+                                                    }
                                                 }
-                                            }
-                                        },
-                                        onLongPress = {
-                                            viewModel.enterContextualSelectionMode(folderInfo.bucketId)
-                                        },
-                                        onToggleFavorite = { viewModel.toggleFavorite(folderInfo.bucketId) },
-                                        onSelectRecursively = { viewModel.selectFolderRecursively(folderInfo.bucketId) },
-                                        onDeselectRecursively = { viewModel.deselectChildren(folderInfo.bucketId) },
-                                        onRename = { viewModel.showRenameDialog(folderInfo.bucketId) },
-                                        onMove = { viewModel.showMoveFolderDialog(folderInfo.bucketId) },
-                                        onMarkAsSorted = { viewModel.markFolderAsSorted(folderInfo) }
-                                    )
+                                            },
+                                            onLongPress = {
+                                                viewModel.enterContextualSelectionMode(folderInfo.bucketId)
+                                            },
+                                            onToggleFavorite = { viewModel.toggleFavorite(folderInfo.bucketId) },
+                                            onSelectRecursively = { viewModel.selectFolderRecursively(folderInfo.bucketId) },
+                                            onDeselectRecursively = { viewModel.deselectChildren(folderInfo.bucketId) },
+                                            onRename = { viewModel.showRenameDialog(folderInfo.bucketId) },
+                                            onMove = { viewModel.showMoveFolderDialog(folderInfo.bucketId) },
+                                            onMarkAsSorted = { viewModel.markFolderAsSorted(folderInfo) }
+                                        )
+                                    }
                                 }
                             }
                         }
+                        FastScrollbar(
+                            state = listState,
+                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
+                        )
                     }
                 }
             }

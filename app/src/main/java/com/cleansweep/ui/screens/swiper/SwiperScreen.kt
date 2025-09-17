@@ -95,6 +95,7 @@ import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.ButtonDefaults
+import com.cleansweep.ui.components.FastScrollbar
 import java.text.DecimalFormat
 import kotlin.math.abs
 import kotlin.math.log10
@@ -298,7 +299,9 @@ fun SwiperScreen(
                                 screenshotDeletesVideo = screenshotDeletesVideo,
                                 folderNameLayout = folderNameLayout
                             )
-                            Box(modifier = Modifier.fillMaxHeight().width(340.dp)) {
+                            Box(modifier = Modifier
+                                .fillMaxHeight()
+                                .width(340.dp)) {
                                 BottomFolderBar(
                                     targetFolders = uiState.targetFolders,
                                     compactFoldersView = uiState.compactFoldersView,
@@ -1261,8 +1264,13 @@ private fun MediaItemCard(
                     clip = false
                 },
         ) {
-            Card(modifier = Modifier.fillMaxSize().align(Alignment.Center), shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.2f))) {
-                Box(modifier = Modifier.fillMaxSize().background(Color.Transparent).clip(MaterialTheme.shapes.medium)) {
+            Card(modifier = Modifier
+                .fillMaxSize()
+                .align(Alignment.Center), shape = MaterialTheme.shapes.medium, colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.2f))) {
+                Box(modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Transparent)
+                    .clip(MaterialTheme.shapes.medium)) {
                     if (item.isVideo) {
                         VideoPlayer(
                             exoPlayer = exoPlayer,
@@ -1325,7 +1333,9 @@ private fun MediaItemCard(
                         }
 
                         Column(
-                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             if (item.isVideo) {
@@ -1340,7 +1350,9 @@ private fun MediaItemCard(
                                     },
                                     colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
                                     contentPadding = PaddingValues(4.dp),
-                                    modifier = Modifier.align(Alignment.End).padding(end = 8.dp)
+                                    modifier = Modifier
+                                        .align(Alignment.End)
+                                        .padding(end = 8.dp)
                                 ) {
                                     Text(
                                         "${videoPlaybackSpeed}x",
@@ -1403,7 +1415,9 @@ private fun VideoPlayer(
 
 @Composable
 private fun NoMoreItemsMessage(pendingChanges: List<PendingChange>, onShowSummarySheet: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("No more items to sort!")
         Spacer(modifier = Modifier.height(16.dp))
         if (pendingChanges.isNotEmpty()) {
@@ -1414,7 +1428,9 @@ private fun NoMoreItemsMessage(pendingChanges: List<PendingChange>, onShowSummar
 
 @Composable
 private fun ErrorMessage(message: String, onRetry: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Column(modifier = Modifier
+        .fillMaxSize()
+        .padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(message)
         Spacer(modifier = Modifier.height(16.dp))
         Button(onClick = onRetry) { Text("Retry") }
@@ -1430,7 +1446,9 @@ private fun AlreadyOrganizedDialog(
     onClose: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -1449,7 +1467,9 @@ private fun AlreadyOrganizedDialog(
         Spacer(modifier = Modifier.height(32.dp))
         Button(
             onClick = onSelectNewFolders,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.FolderOpen,
@@ -1461,7 +1481,9 @@ private fun AlreadyOrganizedDialog(
         }
         Button(
             onClick = onResetSingleFolderHistory,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.FolderOff,
@@ -1474,7 +1496,9 @@ private fun AlreadyOrganizedDialog(
         if (showResetHistoryButton) {
             Button(
                 onClick = onResetHistory,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
@@ -1487,7 +1511,9 @@ private fun AlreadyOrganizedDialog(
         }
         OutlinedButton(
             onClick = onClose,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
         ) {
             Icon(
                 imageVector = Icons.Default.Close,

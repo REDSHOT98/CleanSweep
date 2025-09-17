@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.cleansweep.ui.components.FastScrollbar
 import com.mikepenz.aboutlibraries.entity.Library
 import com.mikepenz.aboutlibraries.ui.compose.LibrariesContainer
 import com.mikepenz.aboutlibraries.ui.compose.LibraryDefaults
@@ -99,20 +102,32 @@ fun OpenSourceLicensesScreen(onNavigateUp: () -> Unit) {
                 CircularProgressIndicator()
             }
         } else {
-            LibrariesContainer(
-                libraries = libraries,
-                modifier = Modifier.padding(padding),
-                colors = LibraryDefaults.libraryColors(
-                    backgroundColor = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground,
-                    badgeBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
-                    badgeContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ),
-                // Intercept the click to show our themed dialog instead of the default one.
-                onLibraryClick = { library ->
-                    selectedLibrary = library
-                }
-            )
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)) {
+                val listState = rememberLazyListState()
+                LibrariesContainer(
+                    libraries = libraries,
+                    lazyListState = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    colors = LibraryDefaults.libraryColors(
+                        backgroundColor = MaterialTheme.colorScheme.background,
+                        contentColor = MaterialTheme.colorScheme.onBackground,
+                        badgeBackgroundColor = MaterialTheme.colorScheme.primaryContainer,
+                        badgeContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    // Intercept the click to show our themed dialog instead of the default one.
+                    onLibraryClick = { library ->
+                        selectedLibrary = library
+                    }
+                )
+                FastScrollbar(
+                    state = listState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                )
+            }
         }
     }
 }

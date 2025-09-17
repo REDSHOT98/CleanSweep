@@ -23,7 +23,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -52,6 +54,7 @@ import com.cleansweep.data.model.MediaItem
 import com.cleansweep.domain.model.DuplicateGroup
 import com.cleansweep.domain.model.ScanResultGroup
 import com.cleansweep.domain.model.SimilarGroup
+import com.cleansweep.ui.components.FastScrollbar
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -339,6 +342,7 @@ fun GroupDetailsScreen(
         } else {
             var scale by remember { mutableFloatStateOf(1f) }
             val coroutineScope = rememberCoroutineScope()
+            val gridState = rememberLazyGridState()
 
             LaunchedEffect(uiState.detailViewColumnCount) {
                 if (scale != 1f) {
@@ -351,71 +355,88 @@ fun GroupDetailsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .pointerInput(uiState.detailViewColumnCount) {
-                        forEachGesture {
-                            awaitPointerEventScope {
-                                var gestureZoom = 1f
-                                awaitFirstDown(requireUnconsumed = false)
-                                do {
-                                    val event = awaitPointerEvent()
-                                    // Only process zoom if there is more than one pointer
-                                    if (event.changes.size > 1) {
-                                        val zoom = event.calculateZoom()
-                                        scale *= zoom
-                                        scale = scale.coerceIn(MIN_VISUAL_SCALE, MAX_VISUAL_SCALE)
-                                        gestureZoom *= zoom
+            ) {
+                Box(
+                    modifier = Modifier
+                        .pointerInput(uiState.detailViewColumnCount) {
+                            forEachGesture {
+                                awaitPointerEventScope {
+                                    var gestureZoom = 1f
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        // Only process zoom if there is more than one pointer
+                                        if (event.changes.size > 1) {
+                                            val zoom = event.calculateZoom()
+                                            scale *= zoom
+                                            scale = scale.coerceIn(MIN_VISUAL_SCALE, MAX_VISUAL_SCALE)
+                                            gestureZoom *= zoom
 
-                                        if (gestureZoom > ZOOM_IN_THRESHOLD) {
-                                            val newCount = (uiState.detailViewColumnCount - 1).coerceIn(1, 3)
-                                            if (newCount != uiState.detailViewColumnCount) {
-                                                viewModel.setDetailViewColumnCount(newCount)
-                                                gestureZoom = 1f
+                                            if (gestureZoom > ZOOM_IN_THRESHOLD) {
+                                                val newCount = (uiState.detailViewColumnCount - 1).coerceIn(1, 3)
+                                                if (newCount != uiState.detailViewColumnCount) {
+                                                    viewModel.setDetailViewColumnCount(newCount)
+                                                    gestureZoom = 1f
+                                                }
+                                            } else if (gestureZoom < ZOOM_OUT_THRESHOLD) {
+                                                val newCount = (uiState.detailViewColumnCount + 1).coerceIn(1, 3)
+                                                if (newCount != uiState.detailViewColumnCount) {
+                                                    viewModel.setDetailViewColumnCount(newCount)
+                                                    gestureZoom = 1f
+                                                }
                                             }
-                                        } else if (gestureZoom < ZOOM_OUT_THRESHOLD) {
-                                            val newCount = (uiState.detailViewColumnCount + 1).coerceIn(1, 3)
-                                            if (newCount != uiState.detailViewColumnCount) {
-                                                viewModel.setDetailViewColumnCount(newCount)
-                                                gestureZoom = 1f
-                                            }
+                                            event.changes.forEach { it.consume() }
                                         }
-                                        event.changes.forEach { it.consume() }
-                                    }
-                                } while (event.changes.any { it.pressed })
+                                    } while (event.changes.any { it.pressed })
 
-                                coroutineScope.launch {
-                                    animate(scale, 1f) { value, _ -> scale = value }
+                                    coroutineScope.launch {
+                                        animate(scale, 1f) { value, _ -> scale = value }
+                                    }
                                 }
                             }
                         }
-                    }
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    }
-            ) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(uiState.detailViewColumnCount),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
                 ) {
-                    items(group.items, key = { "detail-${it.id}" }) { item ->
-                        DetailImageCard(
-                            item = item,
-                            isSelected = item.id in uiState.selectedForDeletion,
-                            onToggleSelection = { viewModel.toggleSelection(item) },
-                            onOpenFile = {
-                                val intent = viewModel.getOpenFileIntent(item)
-                                try {
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Could not open media. No application found.", Toast.LENGTH_SHORT).show()
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(uiState.detailViewColumnCount),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(group.items, key = { "detail-${it.id}" }) { item ->
+                            DetailImageCard(
+                                item = item,
+                                isSelected = item.id in uiState.selectedForDeletion,
+                                onToggleSelection = { viewModel.toggleSelection(item) },
+                                onOpenFile = {
+                                    val intent = viewModel.getOpenFileIntent(item)
+                                    try {
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        Toast
+                                            .makeText(
+                                                context,
+                                                "Could not open media. No application found.",
+                                                Toast.LENGTH_SHORT
+                                            )
+                                            .show()
+                                    }
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
+                FastScrollbar(
+                    state = gridState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                )
             }
         }
     }
@@ -752,7 +773,9 @@ private fun UnscannableFilesDialog(
                     Text("All hidden and temporary files have been filtered. Toggle the switch below to see them.")
                 }
                 LazyColumn(
-                    modifier = Modifier.weight(1f, fill = false).fillMaxWidth()
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
                 ) {
                     groupedFiles.forEach { (directory, files) ->
                         item {
@@ -808,42 +831,52 @@ private fun ListView(
     onDismissStaleResultsBanner: () -> Unit,
     onRescan: () -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp), // Keep horizontal padding in cards
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item {
-            // This Box ensures the padding doesn't compound with LazyColumn's arrangement spacing
-            Box {
-                if (uiState.staleResultsInfo != null && !uiState.staleResultsInfo.isDismissed && uiState.scanState != ScanState.Scanning) {
-                    StaleResultsWarningCard(
-                        timestamp = uiState.staleResultsInfo.timestamp,
-                        onDismiss = onDismissStaleResultsBanner,
-                        onRescan = onRescan
+    val listState = rememberLazyListState()
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp), // Keep horizontal padding in cards
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item {
+                // This Box ensures the padding doesn't compound with LazyColumn's arrangement spacing
+                Box {
+                    if (uiState.staleResultsInfo != null && !uiState.staleResultsInfo.isDismissed && uiState.scanState != ScanState.Scanning) {
+                        StaleResultsWarningCard(
+                            timestamp = uiState.staleResultsInfo.timestamp,
+                            onDismiss = onDismissStaleResultsBanner,
+                            onRescan = onRescan
+                        )
+                    }
+                }
+            }
+
+            if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
+                item {
+                    UnscannableFilesSummaryCard(
+                        count = uiState.unscannableFiles.size,
+                        onClick = onShowUnscannableFiles,
+                        onDismiss = onDismissUnscannableSummary
                     )
                 }
             }
-        }
 
-        if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
-            item {
-                UnscannableFilesSummaryCard(
-                    count = uiState.unscannableFiles.size,
-                    onClick = onShowUnscannableFiles,
-                    onDismiss = onDismissUnscannableSummary
-                )
-            }
-        }
-
-        items(uiState.resultGroups, key = { it.uniqueId }) { group ->
-            Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-                when (group) {
-                    is DuplicateGroup -> DuplicateGroupCard(group, uiState.selectedForDeletion, onToggleSelection, onToggleSelectAll, onSelectAllButOldest, onSelectAllButNewest, onHideGroup, onOpenFile)
-                    is SimilarGroup -> SimilarMediaGroupCard(group, uiState.selectedForDeletion, onToggleSelection, onToggleSelectAll, onSelectAllButOldest, onSelectAllButNewest, onHideGroup, onOpenFile)
+            items(uiState.resultGroups, key = { it.uniqueId }) { group ->
+                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    when (group) {
+                        is DuplicateGroup -> DuplicateGroupCard(group, uiState.selectedForDeletion, onToggleSelection, onToggleSelectAll, onSelectAllButOldest, onSelectAllButNewest, onHideGroup, onOpenFile)
+                        is SimilarGroup -> SimilarMediaGroupCard(group, uiState.selectedForDeletion, onToggleSelection, onToggleSelectAll, onSelectAllButOldest, onSelectAllButNewest, onHideGroup, onOpenFile)
+                    }
                 }
             }
         }
+        FastScrollbar(
+            state = listState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp)
+        )
     }
 }
 
@@ -863,6 +896,7 @@ private fun GridView(
 ) {
     var scale by remember { mutableFloatStateOf(1f) }
     val coroutineScope = rememberCoroutineScope()
+    val gridState = rememberLazyGridState()
 
     LaunchedEffect(uiState.gridViewColumnCount) {
         if (scale != 1f) {
@@ -875,90 +909,101 @@ private fun GridView(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(uiState.gridViewColumnCount) {
-                forEachGesture {
-                    awaitPointerEventScope {
-                        var gestureZoom = 1f
-                        awaitFirstDown(requireUnconsumed = false)
-                        do {
-                            val event = awaitPointerEvent()
-                            // Only process zoom if there is more than one pointer
-                            if (event.changes.size > 1) {
-                                val zoom = event.calculateZoom()
-                                scale *= zoom
-                                scale = scale.coerceIn(MIN_VISUAL_SCALE, MAX_VISUAL_SCALE)
-                                gestureZoom *= zoom
-
-                                if (gestureZoom > ZOOM_IN_THRESHOLD) {
-                                    val newCount = (uiState.gridViewColumnCount - 1).coerceIn(2, 4)
-                                    if (newCount != uiState.gridViewColumnCount) {
-                                        onColumnCountChange(newCount)
-                                        gestureZoom = 1f // Reset logical zoom
-                                    }
-                                } else if (gestureZoom < ZOOM_OUT_THRESHOLD) {
-                                    val newCount = (uiState.gridViewColumnCount + 1).coerceIn(2, 4)
-                                    if (newCount != uiState.gridViewColumnCount) {
-                                        onColumnCountChange(newCount)
-                                        gestureZoom = 1f // Reset logical zoom
-                                    }
-                                }
-                                event.changes.forEach { it.consume() }
-                            }
-                        } while (event.changes.any { it.pressed })
-
-                        coroutineScope.launch {
-                            animate(scale, 1f) { value, _ -> scale = value }
-                        }
-                    }
-                }
-            }
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
     ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(uiState.gridViewColumnCount),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item(span = { GridItemSpan(uiState.gridViewColumnCount) }) {
-                Column {
-                    if (uiState.staleResultsInfo != null && !uiState.staleResultsInfo.isDismissed && uiState.scanState != ScanState.Scanning) {
-                        Box(modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)) {
-                            StaleResultsWarningCard(
-                                timestamp = uiState.staleResultsInfo.timestamp,
-                                onDismiss = onDismissStaleResultsBanner,
-                                onRescan = onRescan
-                            )
-                        }
-                    }
-                    if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
-                        Box(modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)) {
-                            UnscannableFilesSummaryCard(
-                                count = uiState.unscannableFiles.size,
-                                onClick = onShowUnscannableFiles,
-                                onDismiss = onDismissUnscannableSummary
-                            )
+        Box(
+            modifier = Modifier
+                .pointerInput(uiState.gridViewColumnCount) {
+                    forEachGesture {
+                        awaitPointerEventScope {
+                            var gestureZoom = 1f
+                            awaitFirstDown(requireUnconsumed = false)
+                            do {
+                                val event = awaitPointerEvent()
+                                // Only process zoom if there is more than one pointer
+                                if (event.changes.size > 1) {
+                                    val zoom = event.calculateZoom()
+                                    scale *= zoom
+                                    scale = scale.coerceIn(MIN_VISUAL_SCALE, MAX_VISUAL_SCALE)
+                                    gestureZoom *= zoom
+
+                                    if (gestureZoom > ZOOM_IN_THRESHOLD) {
+                                        val newCount = (uiState.gridViewColumnCount - 1).coerceIn(2, 4)
+                                        if (newCount != uiState.gridViewColumnCount) {
+                                            onColumnCountChange(newCount)
+                                            gestureZoom = 1f // Reset logical zoom
+                                        }
+                                    } else if (gestureZoom < ZOOM_OUT_THRESHOLD) {
+                                        val newCount = (uiState.gridViewColumnCount + 1).coerceIn(2, 4)
+                                        if (newCount != uiState.gridViewColumnCount) {
+                                            onColumnCountChange(newCount)
+                                            gestureZoom = 1f // Reset logical zoom
+                                        }
+                                    }
+                                    event.changes.forEach { it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+
+                            coroutineScope.launch {
+                                animate(scale, 1f) { value, _ -> scale = value }
+                            }
                         }
                     }
                 }
-            }
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+        ) {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(uiState.gridViewColumnCount),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item(span = { GridItemSpan(uiState.gridViewColumnCount) }) {
+                    Column {
+                        if (uiState.staleResultsInfo != null && !uiState.staleResultsInfo.isDismissed && uiState.scanState != ScanState.Scanning) {
+                            Box(modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)) {
+                                StaleResultsWarningCard(
+                                    timestamp = uiState.staleResultsInfo.timestamp,
+                                    onDismiss = onDismissStaleResultsBanner,
+                                    onRescan = onRescan
+                                )
+                            }
+                        }
+                        if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
+                            Box(modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)) {
+                                UnscannableFilesSummaryCard(
+                                    count = uiState.unscannableFiles.size,
+                                    onClick = onShowUnscannableFiles,
+                                    onDismiss = onDismissUnscannableSummary
+                                )
+                            }
+                        }
+                    }
+                }
 
-            items(uiState.resultGroups, key = { "grid-${it.uniqueId}" }) { group ->
-                GridGroupCard(
-                    group = group,
-                    selectedIds = uiState.selectedForDeletion,
-                    onCardClick = onViewGroup,
-                    onToggleSelectAll = onToggleSelectAll,
-                    onSelectAllButOldest = onSelectAllButOldest,
-                    onSelectAllButNewest = onSelectAllButNewest,
-                    onHideGroup = onHideGroup
-                )
+                items(uiState.resultGroups, key = { "grid-${it.uniqueId}" }) { group ->
+                    GridGroupCard(
+                        group = group,
+                        selectedIds = uiState.selectedForDeletion,
+                        onCardClick = onViewGroup,
+                        onToggleSelectAll = onToggleSelectAll,
+                        onSelectAllButOldest = onSelectAllButOldest,
+                        onSelectAllButNewest = onSelectAllButNewest,
+                        onHideGroup = onHideGroup
+                    )
+                }
             }
         }
+        FastScrollbar(
+            state = gridState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp)
+        )
     }
 }
 
@@ -1160,21 +1205,30 @@ private fun DuplicateGroupCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { onSelectAllButOldest(group) },
-                    Modifier.weight(0.8f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(0.8f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text("Keep Oldest")
                 }
 
                 OutlinedButton(
                     onClick = { onSelectAllButNewest(group) },
-                    Modifier.weight(0.8f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(0.8f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text("Keep Newest")
                 }
 
                 OutlinedButton(
                     onClick = { onToggleSelectAll(group) },
-                    Modifier.weight(1f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(1f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text(if (isAllSelected) "Unselect All" else "Select All")
                 }
@@ -1241,21 +1295,30 @@ private fun SimilarMediaGroupCard(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { onSelectAllButOldest(group) },
-                    Modifier.weight(0.8f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(0.8f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text("Keep Oldest")
                 }
 
                 OutlinedButton(
                     onClick = { onSelectAllButNewest(group) },
-                    Modifier.weight(0.8f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(0.8f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text("Keep Newest")
                 }
 
                 OutlinedButton(
                     onClick = { onToggleSelectAll(group) },
-                    Modifier.weight(1f).wrapContentHeight().heightIn(min = 58.dp)
+                    Modifier
+                        .weight(1f)
+                        .wrapContentHeight()
+                        .heightIn(min = 58.dp)
                 ) {
                     Text(if (isAllSelected) "Unselect All" else "Select All")
                 }
