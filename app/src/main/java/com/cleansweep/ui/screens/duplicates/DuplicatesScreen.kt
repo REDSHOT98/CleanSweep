@@ -102,7 +102,7 @@ fun DuplicatesScreen(
 
     LaunchedEffect(uiState.toastMessage) {
         uiState.toastMessage?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
             viewModel.toastMessageShown()
         }
     }
@@ -422,7 +422,7 @@ fun GroupDetailsScreen(
                                             .makeText(
                                                 context,
                                                 "Could not open media. No application found.",
-                                                Toast.LENGTH_SHORT
+                                                Toast.LENGTH_LONG
                                             )
                                             .show()
                                     }

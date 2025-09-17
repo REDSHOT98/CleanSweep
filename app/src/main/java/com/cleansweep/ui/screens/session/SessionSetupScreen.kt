@@ -80,7 +80,7 @@ fun SessionSetupScreen(
     // Handle toast messages
     LaunchedEffect(uiState.toastMessage) {
         uiState.toastMessage?.let {
-            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
             viewModel.toastMessageShown()
         }
     }

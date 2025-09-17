@@ -720,7 +720,7 @@ private fun MediaItemContextMenu(
                     try {
                         appContext.startActivity(openIntent)
                     } catch (e: Exception) {
-                        Toast.makeText(appContext, "No app can open this file.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(appContext, "No app can open this file.", Toast.LENGTH_LONG).show()
                     }
                     onDismiss()
                 },
