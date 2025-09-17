@@ -147,6 +147,14 @@ class SettingsViewModel @Inject constructor(
                 initialValue = true
             )
 
+    val hideSkipButton: StateFlow<Boolean> =
+        preferencesRepository.hideSkipButtonFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = true
+            )
+
     val defaultAlbumCreationPath: StateFlow<String> =
         preferencesRepository.defaultAlbumCreationPathFlow
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
@@ -483,6 +491,12 @@ class SettingsViewModel @Inject constructor(
     fun setUnfavoriteRemovesFromBar(enabled: Boolean) {
         viewModelScope.launch {
             preferencesRepository.setUnfavoriteRemovesFromBar(enabled)
+        }
+    }
+
+    fun setHideSkipButton(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setHideSkipButton(enabled)
         }
     }
 

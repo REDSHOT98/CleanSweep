@@ -108,6 +108,8 @@ data class SwiperUiState(
     val showConfirmExitDialog: Boolean = false,
     val currentTheme: AppTheme = AppTheme.SYSTEM,
     val isCurrentItemPendingConversion: Boolean = false,
+    val isSkipButtonHidden: Boolean = true,
+    val sessionSkippedCount: Int = 0,
 
     // Pre-processed lists for Summary Sheet performance
     val toDelete: List<PendingChange> = emptyList(),
@@ -141,6 +143,7 @@ class SwiperViewModel @Inject constructor(
 
     private val newlyAddedTargetFolders = MutableStateFlow<Map<String, String>>(emptyMap())
     private val sessionHiddenTargetFolders = MutableStateFlow<Set<String>>(emptySet())
+    private val sessionSkippedMediaIds = mutableSetOf<String>()
 
     val invertSwipe: StateFlow<Boolean> = preferencesRepository.invertSwipeFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -333,6 +336,11 @@ class SwiperViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            preferencesRepository.hideSkipButtonFlow.collectLatest { isHidden ->
+                _uiState.update { it.copy(isSkipButtonHidden = isHidden) }
+            }
+        }
+        viewModelScope.launch {
             val initialExpandedState = preferencesRepository.bottomBarExpandedFlow.first()
             _uiState.update { it.copy(isFolderBarExpanded = initialExpandedState) }
         }
@@ -438,7 +446,7 @@ class SwiperViewModel @Inject constructor(
                         allItems.addAll(newBatch)
 
                         if (!initialItemFound) {
-                            val allProcessedIds = sessionProcessedMediaIds + processedMediaIds
+                            val allProcessedIds = sessionProcessedMediaIds + processedMediaIds + sessionSkippedMediaIds
                             val firstUnprocessedIndex = allItems.indexOfFirst { it.id !in allProcessedIds }
                             if (firstUnprocessedIndex != -1) {
                                 initialItemFound = true
@@ -506,7 +514,8 @@ class SwiperViewModel @Inject constructor(
         val currentState = _uiState.value
         val allProcessedIds = sessionProcessedMediaIds +
                 (if (_rememberProcessedMediaEnabled) processedMediaIds else emptySet()) +
-                currentState.pendingChanges.map { it.item.id }.toSet()
+                currentState.pendingChanges.map { it.item.id }.toSet() +
+                sessionSkippedMediaIds
 
         val searchStartIndex = if (isDeletion) currentState.currentIndex else currentState.currentIndex + 1
 
@@ -528,7 +537,7 @@ class SwiperViewModel @Inject constructor(
                     )
                 }
             } else {
-                _uiState.update { it.copy(currentItem = null, isSortingComplete = true, showSummarySheet = it.pendingChanges.isNotEmpty(), isCurrentItemPendingConversion = false) }
+                _uiState.update { it.copy(currentItem = null, isSortingComplete = true, showSummarySheet = it.pendingChanges.isNotEmpty(), isCurrentItemPendingConversion = false, sessionSkippedCount = sessionSkippedMediaIds.size) }
             }
         } else {
             val hasPendingChanges = currentState.pendingChanges.isNotEmpty()
@@ -537,7 +546,8 @@ class SwiperViewModel @Inject constructor(
                 isSortingComplete = true,
                 showSummarySheet = hasPendingChanges,
                 videoPlaybackPosition = 0L,
-                isCurrentItemPendingConversion = false
+                isCurrentItemPendingConversion = false,
+                sessionSkippedCount = sessionSkippedMediaIds.size
             ) }
         }
     }
@@ -551,6 +561,12 @@ class SwiperViewModel @Inject constructor(
     fun handleSwipeRight() {
         val currentItem = _uiState.value.currentItem ?: return
         addPendingChange(PendingChange(currentItem, if (_invertSwipe) SwiperAction.Delete(currentItem) else SwiperAction.Keep(currentItem)))
+        advanceState()
+    }
+
+    fun handleSkip() {
+        val currentItem = _uiState.value.currentItem ?: return
+        sessionSkippedMediaIds.add(currentItem.id)
         advanceState()
     }
 
@@ -1061,6 +1077,7 @@ class SwiperViewModel @Inject constructor(
             _uiState.update { it.copy(showConfirmExitDialog = true) }
         } else {
             sessionHiddenTargetFolders.value = emptySet()
+            sessionSkippedMediaIds.clear()
             viewModelScope.launch {
                 _navigationEvent.emit(NavigationEvent.NavigateUp)
             }
@@ -1071,6 +1088,7 @@ class SwiperViewModel @Inject constructor(
         viewModelScope.launch {
             logJitSummary()
             sessionHiddenTargetFolders.value = emptySet()
+            sessionSkippedMediaIds.clear()
             _uiState.update { it.copy(showConfirmExitDialog = false) }
             _navigationEvent.emit(NavigationEvent.NavigateUp)
         }
@@ -1157,10 +1175,12 @@ class SwiperViewModel @Inject constructor(
 
     fun resetPendingChanges() {
         val emptyChanges = emptyList<PendingChange>()
+        sessionSkippedMediaIds.clear()
         _uiState.update { it.copy(
             pendingChanges = emptyChanges,
             showSummarySheet = false,
-            isCurrentItemPendingConversion = false // Reset conversion state
+            isCurrentItemPendingConversion = false, // Reset conversion state
+            sessionSkippedCount = 0
         ) }
         processPendingChangesForSummary(emptyChanges)
         savedStateHandle["pendingChanges"] = null
@@ -1188,7 +1208,8 @@ class SwiperViewModel @Inject constructor(
             preferencesRepository.clearProcessedMediaPaths()
             preferencesRepository.clearPermanentlySortedFolders()
             sessionProcessedMediaIds.clear()
-            _uiState.update { it.copy(toastMessage = "Sorted media history has been reset.") }
+            sessionSkippedMediaIds.clear()
+            _uiState.update { it.copy(toastMessage = "Sorted media history has been reset.", sessionSkippedCount = 0) }
             initializeMedia(bucketIds)
         }
     }

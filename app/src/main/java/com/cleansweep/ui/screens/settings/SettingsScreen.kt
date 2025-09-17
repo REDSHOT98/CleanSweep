@@ -90,6 +90,7 @@ fun SettingsScreen(
     val folderSelectionMode by viewModel.folderSelectionMode.collectAsState()
     val rememberProcessedMedia by viewModel.rememberProcessedMedia.collectAsState()
     val unfavoriteRemovesFromBar by viewModel.unfavoriteRemovesFromBar.collectAsState()
+    val hideSkipButton by viewModel.hideSkipButton.collectAsState()
     val defaultPath by viewModel.defaultAlbumCreationPath.collectAsState()
     val showFavoritesInSetup by viewModel.showFavoritesInSetup.collectAsState()
     val searchAutofocusEnabled by viewModel.searchAutofocusEnabled.collectAsState()
@@ -374,6 +375,14 @@ fun SettingsScreen(
                                 description = "Invert the swipe actions: left to keep, right to delete",
                                 checked = invertSwipe,
                                 onCheckedChange = { viewModel.setInvertSwipe(it) })
+                        },
+                        SettingItem(keywords = listOf("hide skip button")) {
+                            SettingSwitch(
+                                title = "Hide Skip Button",
+                                description = "If enabled, the 'Skip' button will be hidden from the bottom bar.",
+                                checked = hideSkipButton,
+                                onCheckedChange = { viewModel.setHideSkipButton(it) }
+                            )
                         },
                         SettingItem(keywords = listOf("add to favorites by default", "target folder")) {
                             SettingSwitch(

@@ -105,6 +105,7 @@ class PreferencesRepository @Inject constructor(
         val SCREENSHOT_DELETES_VIDEO = booleanPreferencesKey("screenshot_deletes_video")
         val SCREENSHOT_JPEG_QUALITY = stringPreferencesKey("screenshot_jpeg_quality")
         val SIMILARITY_THRESHOLD_LEVEL = stringPreferencesKey("similarity_threshold_level")
+        val HIDE_SWIPER_SKIP_BUTTON = booleanPreferencesKey("hide_swiper_skip_button")
 
         val DEFAULT_VIDEO_SPEED = floatPreferencesKey("default_video_speed")
 
@@ -190,6 +191,11 @@ class PreferencesRepository @Inject constructor(
     val unfavoriteRemovesFromBarFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[PreferencesKeys.UNFAVORITE_REMOVES_FROM_BAR] ?: false
+        }
+
+    val hideSkipButtonFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.HIDE_SWIPER_SKIP_BUTTON] ?: false
         }
 
     val processedMediaPathsFlow: Flow<Set<String>> = context.dataStore.data
@@ -430,6 +436,12 @@ class PreferencesRepository @Inject constructor(
     suspend fun setUnfavoriteRemovesFromBar(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.UNFAVORITE_REMOVES_FROM_BAR] = enabled
+        }
+    }
+
+    suspend fun setHideSkipButton(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.HIDE_SWIPER_SKIP_BUTTON] = enabled
         }
     }
 

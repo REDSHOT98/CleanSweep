@@ -32,6 +32,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -94,6 +95,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material3.ButtonDefaults
 import com.cleansweep.ui.components.FastScrollbar
 import java.text.DecimalFormat
@@ -312,12 +315,14 @@ fun SwiperScreen(
                                     pendingChangesCount = uiState.pendingChanges.size,
                                     currentItem = uiState.currentItem,
                                     targetFavorites = uiState.targetFavorites,
+                                    isSkipButtonHidden = uiState.isSkipButtonHidden,
                                     onSelectFolder = viewModel::moveToFolder,
                                     onLongPressFolder = viewModel::showFolderMenu,
                                     onCreateNewAlbum = viewModel::showAddTargetFolderDialog,
                                     onToggleExpansion = viewModel::toggleFolderBarExpansion,
                                     onShowSummary = viewModel::showSummarySheet,
                                     onUndo = viewModel::revertLastChange,
+                                    onSkip = viewModel::handleSkip,
                                     layout = FolderBarLayout.VERTICAL,
                                     folderName = if (folderNameLayout == FolderNameLayout.BELOW) uiState.currentItem!!.bucketName else null
                                 )
@@ -363,12 +368,14 @@ fun SwiperScreen(
                                 pendingChangesCount = uiState.pendingChanges.size,
                                 currentItem = uiState.currentItem,
                                 targetFavorites = uiState.targetFavorites,
+                                isSkipButtonHidden = uiState.isSkipButtonHidden,
                                 onSelectFolder = viewModel::moveToFolder,
                                 onLongPressFolder = viewModel::showFolderMenu,
                                 onCreateNewAlbum = viewModel::showAddTargetFolderDialog,
                                 onToggleExpansion = viewModel::toggleFolderBarExpansion,
                                 onShowSummary = viewModel::showSummarySheet,
                                 onUndo = viewModel::revertLastChange,
+                                onSkip = viewModel::handleSkip,
                                 layout = folderBarLayout,
                                 folderName = if (folderNameLayout == FolderNameLayout.BELOW) uiState.currentItem!!.bucketName else null
                             )
@@ -382,6 +389,7 @@ fun SwiperScreen(
                         showResetHistoryButton = rememberProcessedMedia,
                         onResetHistory = viewModel::resetProcessedMedia,
                         onResetSingleFolderHistory = viewModel::showForgetMediaInFolderDialog,
+                        skippedCount = uiState.sessionSkippedCount,
                         onClose = { (appContext as? Activity)?.finish() }
                     )
                 }
@@ -735,10 +743,12 @@ private fun ControlBar(
     isExpanded: Boolean,
     showExpandButton: Boolean,
     hasPendingChanges: Boolean,
+    isSkipButtonHidden: Boolean,
     onToggleExpansion: () -> Unit,
     onCreateNewAlbum: () -> Unit,
     onShowSummary: () -> Unit,
-    onUndo: () -> Unit
+    onUndo: () -> Unit,
+    onSkip: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -761,6 +771,12 @@ private fun ControlBar(
             AnimatedVisibility(visible = hasPendingChanges) {
                 IconButton(onClick = onShowSummary) {
                     Icon(Icons.Default.Preview, "Review Changes")
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            AnimatedVisibility(visible = !isSkipButtonHidden) {
+                IconButton(onClick = onSkip) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos , "Skip Item")
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
@@ -802,12 +818,14 @@ private fun BottomFolderBar(
     pendingChangesCount: Int,
     currentItem: MediaItem?,
     targetFavorites: Set<String>,
+    isSkipButtonHidden: Boolean,
     onSelectFolder: (String) -> Unit,
     onLongPressFolder: (String, DpOffset) -> Unit,
     onCreateNewAlbum: () -> Unit,
     onToggleExpansion: () -> Unit,
     onShowSummary: () -> Unit,
     onUndo: () -> Unit,
+    onSkip: () -> Unit,
     layout: FolderBarLayout,
     folderName: String?
 ) {
@@ -856,10 +874,12 @@ private fun BottomFolderBar(
                     isExpanded = isFolderBarExpanded,
                     showExpandButton = showExpandButton,
                     hasPendingChanges = pendingChangesCount > 0,
+                    isSkipButtonHidden = isSkipButtonHidden,
                     onToggleExpansion = onToggleExpansion,
                     onCreateNewAlbum = onCreateNewAlbum,
                     onShowSummary = onShowSummary,
-                    onUndo = onUndo
+                    onUndo = onUndo,
+                    onSkip = onSkip
                 )
 
                 if (targetFolders.isNotEmpty()) {
@@ -1443,6 +1463,7 @@ private fun AlreadyOrganizedDialog(
     showResetHistoryButton: Boolean,
     onResetHistory: () -> Unit,
     onResetSingleFolderHistory: () -> Unit,
+    skippedCount: Int,
     onClose: () -> Unit
 ) {
     Column(
@@ -1464,6 +1485,15 @@ private fun AlreadyOrganizedDialog(
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center
         )
+        if (skippedCount > 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            val itemText = if (skippedCount == 1) "item" else "items"
+            Text(
+                "You skipped $skippedCount $itemText this session.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Spacer(modifier = Modifier.height(32.dp))
         Button(
             onClick = onSelectNewFolders,
