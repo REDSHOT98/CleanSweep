@@ -258,10 +258,12 @@ fun SwiperScreen(
                 .focusRequester(focusRequester)
                 .focusable()
                 .onKeyEvent { event ->
-                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_UP) {
+                    if (event.nativeKeyEvent.action == KeyEvent.ACTION_DOWN) {
                         if (event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_VOLUME_UP || event.nativeKeyEvent.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-                            val hasAudio = exoPlayer.currentTracks.isTypeSupported(C.TRACK_TYPE_AUDIO)
-                            viewModel.toggleMute(hasAudio)
+                            if (uiState.isVideoMuted) {
+                                val hasAudio = exoPlayer.currentTracks.isTypeSupported(C.TRACK_TYPE_AUDIO)
+                                viewModel.toggleMute(hasAudio)
+                            }
                             return@onKeyEvent true
                         }
                     }
