@@ -2,7 +2,7 @@
 
 **Tired of a cluttered photo gallery? Get organized with a swipe!**
 
-CleanSweep is a powerful and private tool for Android that helps you reclaim storage space and organize your photos and videos with a fun, simple, Tinder-like interface. Swipe right to keep, swipe left to delete. It's that easy.
+CleanSweep is a powerful and private application for Android that helps you reclaim storage space and organize your photos and videos with a fun, simple, Tinder-like interface. Swipe right to keep, swipe left to delete. It's that easy.
 
 Best of all, **CleanSweep is 100% offline.** Your files and your data never leave your device, ensuring your memories remain private.
 
@@ -14,6 +14,14 @@ CleanSweep is packed with smart features to make media management a breeze.
 *   ✨ **Intuitive Swiping:** Quickly sort through thousands of files. Swipe right to keep, left to delete.
 *   📁 **One-Tap Sorting:** Add your favorite folders, and they'll appear at the bottom of the screen. Simply tap a folder icon to instantly move the current photo or video.
 *   ✂️ **Clip Video Moments:** Turn a favorite moment from a video into a still image with the built-in frame extractor.
+
+### A Tailor-Made Experience
+
+CleanSweep is built on the belief that your tools should work *your* way. The app features a comprehensive settings menu that lets you fine-tune nearly every aspect of the experience to match your personal workflow.
+
+*   ⚙️ **Deep Customization:** From changing swipe sensitivity and theming to controlling how folder names are displayed, you have the power to create your perfect setup.
+*   🧠 **Smart Defaults:** While highly configurable, the app comes with sensible defaults so you can be productive right out of the box.
+*   👆 **Your Workflow, Your Rules:** Adjust everything from video playback speed to confirmation dialogs and default folder selections to make CleanSweep truly your own.
 
 ### Powerful Duplicate Finder
 Free up gigabytes of space by getting rid of unnecessary copies.
@@ -69,7 +77,7 @@ CleanSweep is built with a modern Android development approach, leveraging the f
 ### Contributing
 Contributions are welcome! Feel free to open an issue for bug reports or feature requests, or submit a pull request with your proposed changes.
 
-**Note:** Feature requests from donating users will be prioritized.
+**Note:** Feature requests from project supporters, such as donors and contributors, will be prioritized.
 
 ## Donating
 *(Coming soon!)*
