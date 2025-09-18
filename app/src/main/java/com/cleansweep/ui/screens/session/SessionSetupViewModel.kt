@@ -154,8 +154,8 @@ class SessionSetupViewModel @Inject constructor(
                 sortOptionFlow
             ) { foldersToProcess, favorites, showFavorites, query, sortOption ->
 
-                val validFolders = foldersToProcess.filter { it.itemCount > 0 }
-                val enrichedFolders = enrichWithPrimarySystemFolders(validFolders)
+                // Note: The repository flow now guarantees it only emits lists with itemCount > 0
+                val enrichedFolders = enrichWithPrimarySystemFolders(foldersToProcess)
 
                 val searchedFolders = if (query.isBlank()) {
                     enrichedFolders
@@ -192,25 +192,29 @@ class SessionSetupViewModel @Inject constructor(
 
                     category.copy(folders = category.folders.sortedWith(primarySort.then(secondarySort)))
                 }
-                Triple(sortedCategories, favorites, validFolders)
+                Triple(sortedCategories, favorites, foldersToProcess) // Pass original `foldersToProcess`
             }.catch { e ->
                 Log.e(TAG, "Error in folder processing flow", e)
                 _uiState.update { it.copy(error = "Failed to load media folders: ${e.message}") }
             }.collect { (newCategories, newFavorites, allFolders) ->
                 _uiState.update { currentState ->
-                    val allAvailableFolderPaths = allFolders.map { it.path }.toSet()
+                    // Guard against UI flicker during refresh: if a refresh is active and an empty
+                    // list comes in, keep the old data until the real data arrives.
+                    val isFlickerGuardActive = allFolders.isEmpty() && currentState.isRefreshing
+                    val displayCategories = if (isFlickerGuardActive) currentState.folderCategories else newCategories
+                    val displayFolders = if (isFlickerGuardActive) currentState.allFolderDetails else allFolders
+
+                    val allAvailableFolderPaths = displayFolders.map { it.path }.toSet()
 
                     val selectionSource = selectionToPreserve ?: currentState.selectedBuckets
                     val sanitizedSelection = selectionSource.filter { it in allAvailableFolderPaths }
 
-                    val isStillLoading = allFolders.isEmpty() && currentState.isInitialLoad
-
                     currentState.copy(
-                        folderCategories = newCategories,
+                        folderCategories = displayCategories,
                         favoriteFolders = newFavorites,
-                        allFolderDetails = allFolders,
+                        allFolderDetails = displayFolders,
                         selectedBuckets = sanitizedSelection,
-                        isInitialLoad = isStillLoading,
+                        isInitialLoad = false, // The new repo flow guarantees the first emission is final.
                         isDataStale = false // Data has arrived, clear the stale flag
                     )
                 }
@@ -257,8 +261,8 @@ class SessionSetupViewModel @Inject constructor(
             selectionToPreserve = _uiState.value.selectedBuckets
             _uiState.update { it.copy(isRefreshing = true) }
             try {
-                // This manually-triggered refresh still performs a full scan.
-                // The underlying flow will update automatically once the DB is repopulated.
+                // This manually-triggered refresh still performs a full scan by clearing the DB cache.
+                // The underlying channelFlow will see the empty DB, rescan, and then emit the new list.
                 mediaRepository.getMediaFoldersWithDetails(forceRefresh = true)
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing folders", e)

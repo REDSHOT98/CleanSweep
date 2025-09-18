@@ -1489,7 +1489,7 @@ private fun AlreadyOrganizedDialog(
             Spacer(modifier = Modifier.height(8.dp))
             val itemText = if (skippedCount == 1) "item" else "items"
             Text(
-                "You skipped $skippedCount $itemText this session.",
+                "You skipped $skippedCount $itemText during this session.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

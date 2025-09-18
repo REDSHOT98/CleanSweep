@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
@@ -128,9 +129,9 @@ fun SessionSetupScreen(
                 val isRecursive = singleFolder.bucketId in uiState.recursivelySelectedRoots
                 titleText = "Mark as Sorted?"
                 bodyText = if (isRecursive) {
-                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' and its subfolders from this list? You can reset this in the settings."
+                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' and its subfolders from this list? These folders won't show up here even if you add new media to them. You can reset this in the settings."
                 } else {
-                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' from this list? You can reset this in the settings."
+                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' from this list? This folder won't show up here even if you add new media to it. You can reset this in the settings."
                 }
             } else {
                 titleText = "Mark ${foldersToMark.size} Folders as Sorted?"
@@ -309,73 +310,117 @@ fun SessionSetupScreen(
                     onRefresh = viewModel::refreshFolders,
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    val listState = rememberLazyListState()
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 8.dp,
-                                bottom = 96.dp
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            uiState.folderCategories.forEach { category ->
-                                if (category.folders.isNotEmpty()) {
-                                    item {
-                                        Text(
-                                            text = category.name,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
-                                        )
-                                    }
-                                    items(category.folders, key = { it.bucketId }) { folderInfo ->
-                                        val isSelectedForSession = folderInfo.bucketId in uiState.selectedBuckets
-                                        val isSelectedForContext = folderInfo.bucketId in uiState.contextSelectedFolderPaths
-                                        EnhancedFolderItem(
-                                            folderInfo = folderInfo,
-                                            isSelected = if (uiState.isContextualSelectionMode) isSelectedForContext else isSelectedForSession,
-                                            isContextualMode = uiState.isContextualSelectionMode,
-                                            isFavorite = folderInfo.bucketId in uiState.favoriteFolders,
-                                            isRecursiveRoot = folderInfo.bucketId in uiState.recursivelySelectedRoots,
-                                            onToggle = {
-                                                if (uiState.isContextualSelectionMode) {
-                                                    viewModel.toggleContextualSelection(folderInfo.bucketId)
-                                                } else {
-                                                    if (isSelectedForSession) {
-                                                        viewModel.unselectBucket(folderInfo.bucketId)
+                    if (uiState.folderCategories.isEmpty()) {
+                        // WRAP the empty state in a LazyColumn to make it scrollable,
+                        // which is required for PullToRefreshBox to work correctly.
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                EmptyStateMessage(modifier = Modifier.fillParentMaxSize())
+                            }
+                        }
+                    } else {
+                        val listState = rememberLazyListState()
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 8.dp,
+                                    bottom = 96.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                uiState.folderCategories.forEach { category ->
+                                    if (category.folders.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = category.name,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+                                            )
+                                        }
+                                        items(category.folders, key = { it.bucketId }) { folderInfo ->
+                                            val isSelectedForSession = folderInfo.bucketId in uiState.selectedBuckets
+                                            val isSelectedForContext = folderInfo.bucketId in uiState.contextSelectedFolderPaths
+                                            EnhancedFolderItem(
+                                                folderInfo = folderInfo,
+                                                isSelected = if (uiState.isContextualSelectionMode) isSelectedForContext else isSelectedForSession,
+                                                isContextualMode = uiState.isContextualSelectionMode,
+                                                isFavorite = folderInfo.bucketId in uiState.favoriteFolders,
+                                                isRecursiveRoot = folderInfo.bucketId in uiState.recursivelySelectedRoots,
+                                                onToggle = {
+                                                    if (uiState.isContextualSelectionMode) {
+                                                        viewModel.toggleContextualSelection(folderInfo.bucketId)
                                                     } else {
-                                                        viewModel.selectBucket(folderInfo.bucketId)
+                                                        if (isSelectedForSession) {
+                                                            viewModel.unselectBucket(folderInfo.bucketId)
+                                                        } else {
+                                                            viewModel.selectBucket(folderInfo.bucketId)
+                                                        }
                                                     }
-                                                }
-                                            },
-                                            onLongPress = {
-                                                viewModel.enterContextualSelectionMode(folderInfo.bucketId)
-                                            },
-                                            onToggleFavorite = { viewModel.toggleFavorite(folderInfo.bucketId) },
-                                            onSelectRecursively = { viewModel.selectFolderRecursively(folderInfo.bucketId) },
-                                            onDeselectRecursively = { viewModel.deselectChildren(folderInfo.bucketId) },
-                                            onRename = { viewModel.showRenameDialog(folderInfo.bucketId) },
-                                            onMove = { viewModel.showMoveFolderDialog(folderInfo.bucketId) },
-                                            onMarkAsSorted = { viewModel.markFolderAsSorted(folderInfo) }
-                                        )
+                                                },
+                                                onLongPress = {
+                                                    viewModel.enterContextualSelectionMode(folderInfo.bucketId)
+                                                },
+                                                onToggleFavorite = { viewModel.toggleFavorite(folderInfo.bucketId) },
+                                                onSelectRecursively = { viewModel.selectFolderRecursively(folderInfo.bucketId) },
+                                                onDeselectRecursively = { viewModel.deselectChildren(folderInfo.bucketId) },
+                                                onRename = { viewModel.showRenameDialog(folderInfo.bucketId) },
+                                                onMove = { viewModel.showMoveFolderDialog(folderInfo.bucketId) },
+                                                onMarkAsSorted = { viewModel.markFolderAsSorted(folderInfo) }
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            FastScrollbar(
+                                state = listState,
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
+                            )
                         }
-                        FastScrollbar(
-                            state = listState,
-                            modifier = Modifier.align(Alignment.CenterEnd).padding(end = 4.dp)
-                        )
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun EmptyStateMessage(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(bottom = 64.dp) // Offset from FABs
+        ) {
+            Icon(
+                imageVector = Icons.Default.PhotoLibrary,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.surfaceVariant
+            )
+            Text(
+                text = "No media folders found",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "This can happen on a new device. Try adding some photos or videos, or pull down to re-scan.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

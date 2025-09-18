@@ -58,7 +58,6 @@ class DirectMediaRepositoryImpl @Inject constructor(
 
     private var folderDetailsCache: List<FolderDetails>? = null
     private var lastFileDiscoveryCache: List<File>? = null
-    private val isFullScanInitiated = AtomicBoolean(false)
 
     @Volatile
     private var lastKnownFolderState: Set<String>? = null
@@ -228,7 +227,6 @@ class DirectMediaRepositoryImpl @Inject constructor(
     private fun invalidateCaches() {
         folderDetailsCache = null
         lastFileDiscoveryCache = null // Invalidate file discovery cache
-        isFullScanInitiated.set(false)
         externalScope.launch {
             folderDetailsDao.clear()
         }
@@ -911,17 +909,33 @@ class DirectMediaRepositoryImpl @Inject constructor(
 
     override fun observeMediaFoldersWithDetails(): Flow<List<FolderDetails>> =
         folderDetailsDao.getAll()
-            .map { cachedList ->
-                if (cachedList.isEmpty() && isFullScanInitiated.compareAndSet(false, true)) {
-                    Log.d("CacheDebug", "Observe: DB is empty, triggering file system scan.")
+            .transformLatest { cachedList ->
+                // This atomic is a guard to ensure the expensive file scan only ever runs once
+                // per app session, even if multiple collectors subscribe.
+                val isScanNeeded = AtomicBoolean(cachedList.isEmpty())
+
+                if (isScanNeeded.get()) {
+                    Log.d("CacheDebug", "transformLatest: DB is empty, triggering scan.")
                     val (details, _) = scanFileSystemForFolderDetails()
-                    folderDetailsDao.upsertAll(details.map { it.toFolderDetailsCache() })
-                    details
+
+                    if (details.isEmpty()) {
+                        // Scan found nothing. This is the definitive empty state for a fresh device.
+                        // Emit it so the UI can stop loading.
+                        Log.d("CacheDebug", "transformLatest: Scan found no folders. Emitting definitive empty list.")
+                        emit(emptyList())
+                    } else {
+                        // Scan found folders. Upsert them into the database.
+                        // The `transformLatest` operator will see the new DB emission, cancel this
+                        // current block, and re-run with the `cachedList` populated, hitting the `else`
+                        // block below. We do not emit here to prevent duplicate data.
+                        Log.d("CacheDebug", "transformLatest: Scan found ${details.size} folders. Upserting to DB.")
+                        folderDetailsDao.upsertAll(details.map { it.toFolderDetailsCache() })
+                    }
                 } else {
-                    Log.d("CacheDebug", "Observe: Emitting ${cachedList.size} folders from DB.")
-                    cachedList
-                        .map { it.toFolderDetails() }
-                        .filter { it.itemCount > 0 } // Prevent temporary 0-count folders from showing
+                    // The DB has data. Transform it and emit. This is the normal path for updates.
+                    Log.d("CacheDebug", "transformLatest: Emitting ${cachedList.size} folders from DB.")
+                    val transformedList = cachedList.map { it.toFolderDetails() }.filter { it.itemCount > 0 }
+                    emit(transformedList)
                 }
             }
             .flowOn(Dispatchers.IO)
@@ -1220,6 +1234,7 @@ class DirectMediaRepositoryImpl @Inject constructor(
     )
 
     override fun observeAllFolders(): Flow<List<Pair<String, String>>> {
+        val isFullScanInitiated = AtomicBoolean(false)
         if (isFullScanInitiated.compareAndSet(false, true)) {
             externalScope.launch {
                 Log.d("CacheDebug", "Initiating full background folder scan.")
