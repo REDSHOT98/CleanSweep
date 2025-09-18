@@ -2,30 +2,67 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Request All Files Access for Android 11 (API 30) and above -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+    <!-- ===================================================================================== -->
+    <!-- PERMISSIONS                                                                         -->
+    <!-- ===================================================================================== -->
+
+    <!--
+    CORE FILE ACCESS PERMISSIONS
+    The app's primary function is to manage, sort, and delete media files across the entire
+    device storage. This requires broad file system access.
+    -->
+
+    <!--
+    [MANDATORY] All Files Access for Android 11 (API 30) and above.
+    This is the primary permission for the app's core functionality. It is required for:
+    1.  Reliable file operations (move, rename, delete) across all directories, which the
+        MediaStore API does not robustly support.
+    2.  Discovering 100% of media files, including those in directories that the MediaStore
+        may not have indexed, ensuring no files are missed during sorting or duplicate scans.
+    3.  Efficiently calculating folder sizes and item counts via direct file system access,
+        which is significantly faster and more accurate than MediaStore queries.
+    -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
 
     <!--
-     Required for Foreground Service and Notifications.
-     The specific FOREGROUND_SERVICE_DATA_SYNC is required for API 34+
-     when using the "dataSync" foregroundServiceType.
+    [LEGACY SUPPORT] External Storage Access for Android 10 (API 29) and below.
+    These permissions, along with `requestLegacyExternalStorage` in the <application> tag,
+    are required for older Android versions. They also support our hybrid file access strategy
+    on newer versions, allowing direct file I/O as a fallback when the MediaStore index
+    is incomplete or stale, guaranteeing comprehensive file discovery.
     -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <!-- Required for the duplicate scanner to continue working when the screen is locked -->
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-
-    <!-- Required for all versions since mediastore sucks completely -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
         tools:ignore="ScopedStorage" />
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
-        tools:ignore="ScopedStorage" />
+        android:maxSdkVersion="29" />
 
+
+    <!--
+    BACKGROUND OPERATION PERMISSIONS
+    Required for running tasks like the duplicate scanner as a foreground service.
+    -->
+
+    <!-- Allows the app to create foreground services to perform long-running tasks (e.g., duplicate scan) with a persistent notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for API 34+ when using the "dataSync" foregroundServiceType, which is appropriate for file processing. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Allows the service to continue running even if the device's screen is turned off. Essential for completing long scans. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+
+    <!-- NOTIFICATION PERMISSION -->
+    <!-- Required for Android 13 (API 33) and above to post notifications, primarily for the foreground service progress. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+
+    <!-- ===================================================================================== -->
+    <!-- APPLICATION DEFINITION                                                              -->
+    <!-- ===================================================================================== -->
     <application
         android:name=".CleanSweepApp"
         android:allowBackup="true"
@@ -33,12 +70,18 @@
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.CleanSweep"
-        tools:targetApi="36">
+        tools:targetApi="36"
+        android:requestLegacyExternalStorage="true"> <!-- Required for the legacy storage model on Android 10 -->
 
+        <!--
+        Main and single Activity of the application.
+        -   Handles all UI composition and navigation.
+        -   Serves as the LAUNCHER entry point.
+        -   `windowSoftInputMode="adjustResize"` ensures the UI correctly resizes when the keyboard appears.
+        -->
         <activity
             android:name="com.cleansweep.ui.MainActivity"
             android:exported="true"
@@ -48,6 +91,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Deep link for potential future integrations. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -59,15 +103,21 @@
         </activity>
 
         <!--
-         NEW: Declare the background scanning service.
-         foregroundServiceType is required for Android 10+ to specify the work type.
-         "dataSync" is appropriate for long-running file processing.
+        Foreground service for the Duplicate Media Scanner.
+        -   `exported="false"` ensures the service can only be started by the app itself.
+        -   `foregroundServiceType="dataSync"` is required for Android 10+ and correctly
+            classifies this service as performing long-running file processing.
         -->
         <service
             android:name=".service.DuplicateScanService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!--
+        Provides a secure way to share file content URIs with other applications.
+        This is essential for features like "Share" or "Open with...", preventing direct
+        file path exposure and working correctly with Scoped Storage principles.
+        -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.provider"
