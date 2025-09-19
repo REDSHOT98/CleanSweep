@@ -58,7 +58,6 @@ CleanSweep needs certain permissions to manage your files. Here’s a simple bre
 | :--- | :--- |
 | **All Files Access** | This is the core permission. It allows CleanSweep to find, move, and delete your photos and videos, no matter where they are stored on your device. |
 | **Notifications** | To show you the progress of long-running tasks, like a duplicate scan, even when the app is in the background. |
-| **Read Media Files** | On newer Android versions, this is required to let the app see your images and videos in the first place. |
 
 ## For Developers
 
