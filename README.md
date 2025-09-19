@@ -1,7 +1,6 @@
 # CleanSweep
-[![Latest Release](https://img.shields.io/github/v/release/loopotto/CleanSweep)](https://github.com/loopotto/CleanSweep/releases/latest)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/loopotto/CleanSweep)](https://github.com/loopotto/CleanSweep/issues)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://gitlab.com/LoopOtto/cleansweep/-/blob/main/LICENSE)
+[![GitLab Issues](https://img.shields.io/gitlab/issues/all/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/issues)
 
 **Tired of a cluttered photo gallery? Get organized with a swipe!**
 
@@ -51,7 +50,7 @@ We take your privacy seriously. CleanSweep is designed from the ground up to res
 ## Getting Started
 
 1.  **Requirements:** You'll need a device running **Android 10 or newer**.
-2.  **Installation:** Download the latest release from the [Releases page](https://github.com/loopotto/CleanSweep/releases).
+2.  **Installation:** Download the latest release from the [Releases page](https://gitlab.com/LoopOtto/cleansweep/-/tags).
 3.  **Onboarding:** The first time you open CleanSweep, a helpful tutorial will walk you through all the features and gestures.
 
 ## Permissions Explained
@@ -77,7 +76,9 @@ CleanSweep is built with a modern Android development approach, leveraging the f
 *   **Background Processing:** WorkManager
 
 ### Contributing
-Contributions are welcome! Feel free to open an issue for bug reports or feature requests, or submit a pull request with your proposed changes.
+We welcome contributions of all kinds, from bug reports to feature requests, code improvements and translations!
+
+To ensure a smooth and collaborative process, please read our **[Contributing Guidelines](CONTRIBUTING.md)** before you start. This document outlines our development workflow, coding standards, and how to submit your changes.
 
 **Note:** Feature requests from project supporters, such as donors and contributors, will be prioritized.
 
