@@ -322,28 +322,17 @@ class DuplicatesViewModel @Inject constructor(
             )
         }
 
-        viewModelScope.launch {
-            // Calculate dynamic timeout
-            val allPaths = mediaRepository.getAllMediaFilePaths()
-            val videoCount = allPaths.count { path ->
-                videoExtensions.any { ext -> path.endsWith(ext, ignoreCase = true) }
-            }
-            val imageCount = allPaths.size - videoCount
-
-            // Heuristic: 2 min base + 150ms/image + 750ms/video
-            val timeout = 120_000L + (imageCount * 150L) + (videoCount * 750L)
-
-            val intent = Intent(context, DuplicateScanService::class.java).apply {
-                action = DuplicateScanService.ACTION_START_SCAN
-                putExtra(DuplicateScanService.EXTRA_SCAN_EXACT, currentState.scanForExactDuplicates)
-                putExtra(DuplicateScanService.EXTRA_SCAN_SIMILAR, currentState.scanForSimilarMedia)
-                putExtra(DuplicateScanService.EXTRA_WAKELOCK_TIMEOUT, timeout)
-            }
-            context.startService(intent)
-            Log.d("DuplicatesViewModel", "Start scan service command issued with exact=${currentState.scanForExactDuplicates}, similar=${currentState.scanForSimilarMedia}, timeout=${timeout}ms")
+        val intent = Intent(context, DuplicateScanService::class.java).apply {
+            action = DuplicateScanService.ACTION_START_SCAN
+            putExtra(DuplicateScanService.EXTRA_SCAN_EXACT, currentState.scanForExactDuplicates)
+            putExtra(DuplicateScanService.EXTRA_SCAN_SIMILAR, currentState.scanForSimilarMedia)
         }
+        context.startService(intent)
+        Log.d(
+            "DuplicatesViewModel",
+            "Start scan service command issued with exact=${currentState.scanForExactDuplicates}, similar=${currentState.scanForSimilarMedia}"
+        )
     }
-
     fun cancelScan() {
         if (_uiState.value.scanState == ScanState.Scanning) {
             _uiState.update {

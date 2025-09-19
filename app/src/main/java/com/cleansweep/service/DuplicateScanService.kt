@@ -79,8 +79,6 @@ class DuplicateScanService : LifecycleService() {
         const val ACTION_CANCEL_SCAN = "com.cleansweep.ACTION_CANCEL_SCAN"
         const val EXTRA_SCAN_EXACT = "com.cleansweep.EXTRA_SCAN_EXACT"
         const val EXTRA_SCAN_SIMILAR = "com.cleansweep.EXTRA_SCAN_SIMILAR"
-        const val EXTRA_WAKELOCK_TIMEOUT = "com.cleansweep.EXTRA_WAKELOCK_TIMEOUT"
-
         private const val PROGRESS_CHANNEL_ID = "DUPLICATE_SCAN_CHANNEL"
         private const val RESULT_CHANNEL_ID = "DUPLICATE_RESULT_CHANNEL"
         private const val PROGRESS_NOTIFICATION_ID = 101
@@ -117,9 +115,7 @@ class DuplicateScanService : LifecycleService() {
                 if (scanJob?.isActive != true) {
                     val scanForExact = intent.getBooleanExtra(EXTRA_SCAN_EXACT, true)
                     val scanForSimilar = intent.getBooleanExtra(EXTRA_SCAN_SIMILAR, true)
-                    val timeout = intent.getLongExtra(EXTRA_WAKELOCK_TIMEOUT, 600_000L) // Default 10 mins
-                    Log.d("DuplicateScanService", "Received START_SCAN with exact=$scanForExact, similar=$scanForSimilar, timeout=$timeout")
-                    acquireWakeLock(timeout)
+                    Log.d("DuplicateScanService", "Received START_SCAN with exact=$scanForExact, similar=$scanForSimilar")
                     startForeground(PROGRESS_NOTIFICATION_ID, createProgressNotification(0, stateHolder.state.value.progressPhase ?: "Preparing..."))
                     startScan(scanForExact, scanForSimilar)
                 }
@@ -171,6 +167,17 @@ class DuplicateScanService : LifecycleService() {
             try {
                 // Quick check for immediate cancellation
                 ensureActive()
+
+                // Calculate dynamic timeout and acquire wakelock
+                val allPaths = mediaRepository.getAllMediaFilePaths()
+                val videoExtensions = setOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
+                val videoCount = allPaths.count { path ->
+                    videoExtensions.any { ext -> path.endsWith(ext, ignoreCase = true) }
+                }
+                val imageCount = allPaths.size - videoCount
+                // Heuristic: 2 min base + 150ms/image + 750ms/video
+                val timeout = 120_000L + (imageCount * 150L) + (videoCount * 750L)
+                acquireWakeLock(timeout)
 
                 // The ViewModel is the source of truth for the initial phase, which we read from the state holder
                 val tracker = ProgressTracker(100, 0, stateHolder.state.value.progressPhase ?: PHASE_PREPARING)
