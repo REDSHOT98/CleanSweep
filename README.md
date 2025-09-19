@@ -1,4 +1,7 @@
 # CleanSweep
+[![Latest Release](https://img.shields.io/github/v/release/loopotto/CleanSweep)](https://github.com/loopotto/CleanSweep/releases/latest)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/loopotto/CleanSweep)](https://github.com/loopotto/CleanSweep/issues)
 
 **Tired of a cluttered photo gallery? Get organized with a swipe!**
 
@@ -83,4 +86,6 @@ Contributions are welcome! Feel free to open an issue for bug reports or feature
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
+Copyright (c) 2025 LoopOtto.
+
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for the full license text.
