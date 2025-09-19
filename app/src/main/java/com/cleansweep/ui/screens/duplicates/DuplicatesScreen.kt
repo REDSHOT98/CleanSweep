@@ -693,11 +693,12 @@ private fun StaleResultsWarningCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
     ) {
         Column {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 4.dp),
+                verticalAlignment = Alignment.Top
+            ) {
                 Row(
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
-                        .fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
@@ -706,7 +707,7 @@ private fun StaleResultsWarningCard(
                         tint = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(modifier = Modifier.padding(top = 8.dp)) {
                         Text(
                             text = "Showing results from $formattedDate",
                             fontWeight = FontWeight.Bold,
@@ -724,10 +725,7 @@ private fun StaleResultsWarningCard(
                     tooltip = { PlainTooltip { Text("Dismiss warning") } },
                     state = rememberTooltipState()
                 ) {
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    ) {
+                    IconButton(onClick = onDismiss) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Dismiss warning",
@@ -763,11 +761,12 @@ private fun UnscannableFilesSummaryCard(
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 4.dp),
+            verticalAlignment = Alignment.Top
+        ) {
             Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -776,7 +775,7 @@ private fun UnscannableFilesSummaryCard(
                     tint = MaterialTheme.colorScheme.onTertiaryContainer
                 )
                 Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     Text(
                         text = "$count files could not be read",
                         fontWeight = FontWeight.Bold,
@@ -794,10 +793,7 @@ private fun UnscannableFilesSummaryCard(
                 tooltip = { PlainTooltip { Text("Dismiss warning") } },
                 state = rememberTooltipState()
             ) {
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                ) {
+                IconButton(onClick = onDismiss) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Dismiss warning",
@@ -1150,14 +1146,13 @@ private fun GridGroupCard(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
-
+            val (overlayColor, icon) = when (selectionState) {
+                SelectionState.ALL -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) to Icons.Filled.CheckCircle
+                SelectionState.PARTIAL -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f) to null
+                SelectionState.NONE -> Color.Transparent to null
+            }
+            
             if (selectionState != SelectionState.NONE) {
-                val (overlayColor, icon) = when (selectionState) {
-                    SelectionState.ALL -> MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) to Icons.Filled.CheckCircle
-                    SelectionState.PARTIAL -> MaterialTheme.colorScheme.secondary.copy(alpha = 0.4f) to null
-                    SelectionState.NONE -> Color.Transparent to null
-                }
-
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
