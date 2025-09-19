@@ -642,7 +642,6 @@ class SwiperViewModel @Inject constructor(
             }
             Log.d(TAG, "applyChanges: Found ${initialChanges.size} initial pending changes.")
 
-            // --- VALIDATION STEP ---
             val validatedChanges = fileOperationsHelper.filterExistingFiles(initialChanges)
             val missingCount = initialChanges.size - validatedChanges.size
 
@@ -658,7 +657,6 @@ class SwiperViewModel @Inject constructor(
                 _uiState.update { it.copy(isApplyingChanges = false, showSummarySheet = false) }
                 return@launch
             }
-            // --- END VALIDATION ---
 
             val finalChanges = synchronizeUnindexedChanges(validatedChanges)
             if (finalChanges == null) {
@@ -806,9 +804,21 @@ class SwiperViewModel @Inject constructor(
                     folderUpdateEventBus.post(FolderUpdateEvent.FolderBatchUpdate(folderDeltas))
                 }
 
-                val originalPaths = originalChanges.map { it.item.id }.toSet()
-                val processedPaths = (originalPaths + moveResults.values.map { it.id }).toSet()
+                val pathsToRemember = mutableSetOf<String>()
 
+                // Add original paths for non-move actions (Keep, Delete, etc.)
+                originalChanges.forEach { change ->
+                    if (change.action !is SwiperAction.Move) {
+                        pathsToRemember.add(change.item.id)
+                    }
+                }
+
+                // Add new destination paths for all moved items
+                moveResults.values.forEach { newItem ->
+                    pathsToRemember.add(newItem.id)
+                }
+
+                val processedPaths = pathsToRemember.toSet()
                 sessionProcessedMediaIds.addAll(processedPaths)
 
                 if (_rememberProcessedMediaEnabled) {

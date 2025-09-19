@@ -214,7 +214,11 @@ class DirectMediaRepositoryImpl @Inject constructor(
                     val path = cursor.getString(dataColumn)
                     // Ensure path exists and has a parent before adding
                     if (path != null) {
-                        File(path).parent?.let { folderPaths.add(it) }
+                        File(path).parentFile?.let { parentFile ->
+                            if (parentFile.name != "To Edit") {
+                                folderPaths.add(parentFile.absolutePath)
+                            }
+                        }
                     }
                 }
             }
@@ -335,7 +339,7 @@ class DirectMediaRepositoryImpl @Inject constructor(
 
         suspend fun processDirectory(directory: File, mediaStoreMap: Map<String, MediaStoreCache>) {
             currentCoroutineContext().ensureActive()
-            if (!directory.exists() || !directory.isDirectory || !directory.canRead() || directory.name.startsWith('.') || !isSafeDestination(directory.absolutePath)) {
+            if (directory.name == "To Edit" || !directory.exists() || !directory.isDirectory || !directory.canRead() || directory.name.startsWith('.') || !isSafeDestination(directory.absolutePath)) {
                 return
             }
 
@@ -529,7 +533,7 @@ class DirectMediaRepositoryImpl @Inject constructor(
             currentCoroutineContext().ensureActive()
             val directory = queue.poll() ?: continue
 
-            if (!directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
+            if (directory.name == "To Edit" || !directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
                 continue
             }
 
@@ -1258,7 +1262,7 @@ class DirectMediaRepositoryImpl @Inject constructor(
             currentCoroutineContext().ensureActive()
             val directory = queue.poll() ?: continue
 
-            if (!directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
+            if (directory.name == "To Edit" || !directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
                 continue
             }
 
