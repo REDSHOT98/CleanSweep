@@ -598,6 +598,38 @@ class SwiperViewModel @Inject constructor(
         }
     }
 
+    fun moveToEditFolder() {
+        val currentItem = _uiState.value.currentItem ?: return
+        viewModelScope.launch {
+            val parentPath = withContext(Dispatchers.IO) {
+                try {
+                    File(currentItem.id).parent
+                } catch (e: Exception) {
+                    Log.e(TAG, "Could not determine parent path for ${currentItem.id}", e)
+                    null
+                }
+            }
+
+            if (parentPath != null) {
+                val toEditPath = File(parentPath, "To Edit").absolutePath
+                val toEditName = "To Edit"
+
+                // Ensure the folder is known to the UI, even if it doesn't exist yet.
+                // This prevents a flicker or missing folder name in the summary sheet.
+                if (!_uiState.value.folderIdToNameMap.containsKey(toEditPath)) {
+                    _uiState.update {
+                        it.copy(folderIdToNameMap = it.folderIdToNameMap + (toEditPath to toEditName))
+                    }
+                }
+
+                moveToFolder(toEditPath)
+            } else {
+                _uiState.update { it.copy(toastMessage = "Could not find parent folder.") }
+            }
+            dismissMediaItemMenu()
+        }
+    }
+
     fun applyChanges() {
         viewModelScope.launch {
             _uiState.update { it.copy(isApplyingChanges = true) }

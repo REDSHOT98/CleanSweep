@@ -435,13 +435,25 @@ private fun DefaultTopAppBar(
         actions = {
             var showSortMenu by remember { mutableStateOf(false) }
 
-            IconButton(onClick = onNavigateToDuplicates) {
-                Icon(Icons.Default.ControlPointDuplicate, contentDescription = "Find Duplicates")
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Find Duplicates") } },
+                state = rememberTooltipState()
+            ) {
+                IconButton(onClick = onNavigateToDuplicates) {
+                    Icon(Icons.Default.ControlPointDuplicate, contentDescription = "Find Duplicates")
+                }
             }
 
             Box {
-                IconButton(onClick = { showSortMenu = true }) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Sort") } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = { showSortMenu = true }) {
+                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                    }
                 }
                 DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
                     DropdownMenuItem(
@@ -500,8 +512,14 @@ private fun DefaultTopAppBar(
                         })
                 }
             }
-            IconButton(onClick = onNavigateToSettings) {
-                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Settings") } },
+                state = rememberTooltipState()
+            ) {
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                }
             }
         }
     )
@@ -520,21 +538,45 @@ private fun ContextualTopAppBar(
     TopAppBar(
         title = { Text("$selectionCount Selected") },
         navigationIcon = {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, contentDescription = "Close selection mode")
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Close selection mode") } },
+                state = rememberTooltipState()
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, contentDescription = "Close selection mode")
+                }
             }
         },
         actions = {
             if (canFavorite) {
-                IconButton(onClick = onToggleFavorite) {
-                    Icon(Icons.Default.Star, contentDescription = "Add to Favorites")
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Add to Favorites") } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(Icons.Default.Star, contentDescription = "Add to Favorites")
+                    }
                 }
             }
-            IconButton(onClick = onMarkAsSorted) {
-                Icon(Icons.Default.CheckCircleOutline, contentDescription = "Mark as Sorted")
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Mark as Sorted") } },
+                state = rememberTooltipState()
+            ) {
+                IconButton(onClick = onMarkAsSorted) {
+                    Icon(Icons.Default.CheckCircleOutline, contentDescription = "Mark as Sorted")
+                }
             }
-            IconButton(onClick = onSelectAll) {
-                Icon(Icons.Default.SelectAll, contentDescription = "Select All")
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Select All") } },
+                state = rememberTooltipState()
+            ) {
+                IconButton(onClick = onSelectAll) {
+                    Icon(Icons.Default.SelectAll, contentDescription = "Select All")
+                }
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -546,7 +588,7 @@ private fun ContextualTopAppBar(
     )
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun EnhancedFolderItem(
     folderInfo: FolderInfo,
@@ -640,8 +682,14 @@ private fun EnhancedFolderItem(
 
             if (!isContextualMode) {
                 Box {
-                    IconButton(onClick = { showContextMenu = true }) {
-                        Icon(Icons.Default.MoreVert, "More Options")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("More Options") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = { showContextMenu = true }) {
+                            Icon(Icons.Default.MoreVert, "More Options")
+                        }
                     }
                     AppDropdownMenu(
                         expanded = showContextMenu,

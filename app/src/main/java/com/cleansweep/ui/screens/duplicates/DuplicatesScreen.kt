@@ -149,27 +149,51 @@ fun DuplicatesScreen(
             TopAppBar(
                 title = { Text(title) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Navigate back") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = onNavigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
+                        }
                     }
                 },
                 actions = {
                     if (uiState.scanState == ScanState.Complete) {
-                        IconButton(onClick = viewModel::resetToIdle) {
-                            Icon(Icons.Outlined.Cached, contentDescription = "New Scan")
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = { PlainTooltip { Text("New Scan") } },
+                            state = rememberTooltipState()
+                        ) {
+                            IconButton(onClick = viewModel::resetToIdle) {
+                                Icon(Icons.Outlined.Cached, contentDescription = "New Scan")
+                            }
                         }
                     }
                     if (uiState.resultViewMode == ResultViewMode.GRID && uiState.scanState == ScanState.Complete) {
-                        IconButton(onClick = viewModel::cycleGridViewZoom) {
-                            Icon(Icons.Outlined.ZoomIn, contentDescription = "Change grid columns")
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = { PlainTooltip { Text("Change grid columns") } },
+                            state = rememberTooltipState()
+                        ) {
+                            IconButton(onClick = viewModel::cycleGridViewZoom) {
+                                Icon(Icons.Outlined.ZoomIn, contentDescription = "Change grid columns")
+                            }
                         }
                     }
                     if (uiState.scanState == ScanState.Complete && uiState.resultGroups.isNotEmpty()) {
-                        IconButton(onClick = viewModel::toggleResultViewMode) {
-                            Icon(
-                                imageVector = if (uiState.resultViewMode == ResultViewMode.LIST) Icons.Outlined.ViewModule else Icons.AutoMirrored.Outlined.ViewList,
-                                contentDescription = "Toggle View Mode"
-                            )
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = { PlainTooltip { Text("Toggle View Mode") } },
+                            state = rememberTooltipState()
+                        ) {
+                            IconButton(onClick = viewModel::toggleResultViewMode) {
+                                Icon(
+                                    imageVector = if (uiState.resultViewMode == ResultViewMode.LIST) Icons.Outlined.ViewModule else Icons.AutoMirrored.Outlined.ViewList,
+                                    contentDescription = "Toggle View Mode"
+                                )
+                            }
                         }
                     }
                 }
@@ -271,19 +295,37 @@ fun GroupDetailsScreen(
             TopAppBar(
                 title = { Text(if (group != null) "View Group (${group.items.size} items)" else "View Group") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateUp) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Back") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = onNavigateUp) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {
                     if (group != null) {
-                        IconButton(onClick = viewModel::cycleDetailViewZoom) {
-                            Icon(Icons.Outlined.ZoomIn, contentDescription = "Change layout columns")
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = { PlainTooltip { Text("Change layout columns") } },
+                            state = rememberTooltipState()
+                        ) {
+                            IconButton(onClick = viewModel::cycleDetailViewZoom) {
+                                Icon(Icons.Outlined.ZoomIn, contentDescription = "Change layout columns")
+                            }
                         }
                         var showMenu by remember { mutableStateOf(false) }
                         Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                            TooltipBox(
+                                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                                tooltip = { PlainTooltip { Text("More options") } },
+                                state = rememberTooltipState()
+                            ) {
+                                IconButton(onClick = { showMenu = true }) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                                }
                             }
                             DropdownMenu(
                                 expanded = showMenu,
@@ -629,6 +671,7 @@ private fun ResultsView(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StaleResultsWarningCard(
     timestamp: Long,
@@ -676,15 +719,21 @@ private fun StaleResultsWarningCard(
                         )
                     }
                 }
-                IconButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.align(Alignment.TopEnd)
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Dismiss warning") } },
+                    state = rememberTooltipState()
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Dismiss warning",
-                        tint = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Dismiss warning",
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
             }
             TextButton(
@@ -700,6 +749,7 @@ private fun StaleResultsWarningCard(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UnscannableFilesSummaryCard(
     count: Int,
@@ -739,15 +789,21 @@ private fun UnscannableFilesSummaryCard(
                     )
                 }
             }
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd)
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text("Dismiss warning") } },
+                state = rememberTooltipState()
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Dismiss warning",
-                    tint = MaterialTheme.colorScheme.onTertiaryContainer
-                )
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Dismiss warning",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
             }
         }
     }
@@ -1148,6 +1204,7 @@ private fun GridGroupCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DuplicateGroupCard(
     group: DuplicateGroup,
@@ -1181,8 +1238,14 @@ private fun DuplicateGroupCard(
                     )
                 }
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("More options") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        }
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -1237,6 +1300,7 @@ private fun DuplicateGroupCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SimilarMediaGroupCard(
     group: SimilarGroup,
@@ -1271,8 +1335,14 @@ private fun SimilarMediaGroupCard(
                     )
                 }
                 Box(modifier = Modifier.align(Alignment.TopEnd)) {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("More options") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More options")
+                        }
                     }
                     DropdownMenu(
                         expanded = showMenu,

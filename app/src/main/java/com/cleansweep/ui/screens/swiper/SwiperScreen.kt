@@ -238,15 +238,33 @@ fun SwiperScreen(
             TopAppBar(
                 title = { Text("") }, // Not sure
                 navigationIcon = {
-                    IconButton(onClick = { viewModel.onNavigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Navigate back") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = { viewModel.onNavigateUp() }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Navigate back")
+                        }
                     }
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToDuplicates) {
-                        Icon(Icons.Default.ControlPointDuplicate, contentDescription = "Find Duplicates")
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Find Duplicates") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = onNavigateToDuplicates) {
+                            Icon(Icons.Default.ControlPointDuplicate, contentDescription = "Find Duplicates")
+                        }
                     }
-                    IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                    TooltipBox(
+                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                        tooltip = { PlainTooltip { Text("Settings") } },
+                        state = rememberTooltipState()
+                    ) {
+                        IconButton(onClick = onNavigateToSettings) { Icon(Icons.Default.Settings, contentDescription = "Settings") }
+                    }
                 }
             )
         }
@@ -285,6 +303,7 @@ fun SwiperScreen(
                                 onSwipeLeft = viewModel::handleSwipeLeft,
                                 onSwipeRight = viewModel::handleSwipeRight,
                                 onLongPress = viewModel::showMediaItemMenu,
+                                onMoveToEdit = viewModel::moveToEditFolder,
                                 hideFilename = uiState.hideFilename,
                                 invertSwipe = invertSwipe,
                                 sensitivity = swipeSensitivity,
@@ -341,6 +360,7 @@ fun SwiperScreen(
                                 onSwipeLeft = viewModel::handleSwipeLeft,
                                 onSwipeRight = viewModel::handleSwipeRight,
                                 onLongPress = viewModel::showMediaItemMenu,
+                                onMoveToEdit = viewModel::moveToEditFolder,
                                 hideFilename = uiState.hideFilename,
                                 invertSwipe = invertSwipe,
                                 sensitivity = swipeSensitivity,
@@ -470,7 +490,8 @@ fun SwiperScreen(
                 isPendingConversion = uiState.isCurrentItemPendingConversion,
                 exoPlayer = exoPlayer,
                 onDismiss = viewModel::dismissMediaItemMenu,
-                onScreenshot = viewModel::addScreenshotChange
+                onScreenshot = viewModel::addScreenshotChange,
+                onMoveToEdit = viewModel::moveToEditFolder
             )
         }
         if (uiState.showSummarySheet) {
@@ -533,6 +554,7 @@ private fun MainContent(
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
     onLongPress: (offset: DpOffset) -> Unit,
+    onMoveToEdit: () -> Unit,
     hideFilename: Boolean,
     invertSwipe: Boolean,
     sensitivity: SwipeSensitivity,
@@ -649,7 +671,8 @@ private fun MediaItemContextMenu(
     isPendingConversion: Boolean,
     exoPlayer: ExoPlayer,
     onDismiss: () -> Unit,
-    onScreenshot: (Long) -> Unit
+    onScreenshot: (Long) -> Unit,
+    onMoveToEdit: () -> Unit
 ) {
     val appContext = LocalContext.current
     if (isVisible && currentItem != null) {
@@ -686,6 +709,11 @@ private fun MediaItemContextMenu(
                 }
             )
             AppMenuDivider()
+            DropdownMenuItem(
+                text = { Text("Move to 'To Edit'") },
+                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                onClick = onMoveToEdit
+            )
             if (currentItem.isVideo) {
                 DropdownMenuItem(
                     text = { Text("Screenshot") },
@@ -740,6 +768,7 @@ private fun MediaItemContextMenu(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ControlBar(
     isExpanded: Boolean,
@@ -752,39 +781,60 @@ private fun ControlBar(
     onUndo: () -> Unit,
     onSkip: () -> Unit
 ) {
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
             .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        IconButton(
-            onClick = onCreateNewAlbum,
-            modifier = Modifier.align(Alignment.CenterStart)
+        TooltipBox(
+            positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+            tooltip = { PlainTooltip { Text("Add Target Folder") } },
+            state = rememberTooltipState()
         ) {
-            Icon(Icons.Default.CreateNewFolder, "Add Target Folder")
+            IconButton(onClick = onCreateNewAlbum) {
+                Icon(Icons.Default.CreateNewFolder, "Add Target Folder")
+            }
         }
 
         Row(
-            modifier = Modifier.align(Alignment.Center),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AnimatedVisibility(visible = hasPendingChanges) {
-                IconButton(onClick = onShowSummary) {
-                    Icon(Icons.Default.Preview, "Review Changes")
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Review Changes") } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = onShowSummary) {
+                        Icon(Icons.Default.Preview, "Review Changes")
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
             AnimatedVisibility(visible = !isSkipButtonHidden) {
-                IconButton(onClick = onSkip) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos , "Skip Item")
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Skip Item") } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = onSkip) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, "Skip Item")
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
             AnimatedVisibility(visible = hasPendingChanges) {
-                IconButton(onClick = onUndo) {
-                    Icon(Icons.AutoMirrored.Filled.Undo, "Undo Last Action")
+                TooltipBox(
+                    positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                    tooltip = { PlainTooltip { Text("Undo Last Action") } },
+                    state = rememberTooltipState()
+                ) {
+                    IconButton(onClick = onUndo) {
+                        Icon(Icons.AutoMirrored.Filled.Undo, "Undo Last Action")
+                    }
                 }
             }
         }
@@ -794,16 +844,22 @@ private fun ControlBar(
                 targetValue = if (isExpanded) 180f else 0f,
                 label = "expand_icon_rotation"
             )
-            IconButton(
-                onClick = onToggleExpansion,
-                modifier = Modifier.align(Alignment.CenterEnd)
+            val contentDesc = if (isExpanded) "Collapse" else "Expand"
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { PlainTooltip { Text(contentDesc) } },
+                state = rememberTooltipState()
             ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.rotate(rotationAngle)
-                )
+                IconButton(onClick = onToggleExpansion) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = contentDesc,
+                        modifier = Modifier.rotate(rotationAngle)
+                    )
+                }
             }
+        } else {
+            Spacer(modifier = Modifier.width(48.dp))
         }
     }
 }
@@ -1118,6 +1174,7 @@ private fun FolderChip(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MediaItemCard(
     item: MediaItem,
@@ -1323,17 +1380,24 @@ private fun MediaItemCard(
                     }
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (item.isVideo) {
-                            IconButton(
-                                onClick = onToggleMute,
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(8.dp)
+                            val muteDesc = if (isVideoMuted) "Unmute video" else "Mute video"
+                            TooltipBox(
+                                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                                tooltip = { PlainTooltip { Text(muteDesc) } },
+                                state = rememberTooltipState()
                             ) {
-                                Icon(
-                                    imageVector = if (isVideoMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-                                    contentDescription = if (isVideoMuted) "Unmute video" else "Mute video",
-                                    tint = Color.White
-                                )
+                                IconButton(
+                                    onClick = onToggleMute,
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isVideoMuted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                                        contentDescription = muteDesc,
+                                        tint = Color.White
+                                    )
+                                }
                             }
                             if (isPendingConversion && !screenshotDeletesVideo) {
                                 Box(

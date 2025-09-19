@@ -25,7 +25,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
 private const val SCROLLBAR_MIN_THUMB_HEIGHT = 0.1f
-private const val SCROLLBAR_MAX_THUMB_HEIGHT = 0.4f
+private const val SCROLLBAR_MAX_THUMB_HEIGHT = 0.6f
 private const val SCROLLBAR_INACTIVE_ALPHA = 0f
 private const val SCROLLBAR_ACTIVE_ALPHA = 0.8f
 
