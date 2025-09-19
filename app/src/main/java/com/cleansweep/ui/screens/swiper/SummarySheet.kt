@@ -25,6 +25,7 @@ import com.cleansweep.data.repository.SummaryViewMode
 import com.cleansweep.ui.components.FastScrollbar
 import com.cleansweep.ui.components.SheetItemCard
 import com.cleansweep.util.rememberIsUsingGestureNavigation
+import kotlin.math.ceil
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +44,9 @@ fun SummarySheet(
     viewMode: SummaryViewMode = SummaryViewMode.LIST,
     onToggleViewMode: () -> Unit = {},
     applyChangesButtonLabel: String = "Apply Changes",
-    sheetScrollState: LazyListState = rememberLazyListState()
+    sheetScrollState: LazyListState = rememberLazyListState(),
+    isMaximized: Boolean = false,
+    onDynamicHeightChange: (Boolean) -> Unit = {}
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
 
@@ -87,7 +90,9 @@ fun SummarySheet(
         onResetChanges = onResetChanges,
         onRevertChange = onRevertChange,
         applyChangesButtonLabel = applyChangesButtonLabel,
-        sheetScrollState = sheetScrollState
+        sheetScrollState = sheetScrollState,
+        isMaximized = isMaximized,
+        onDynamicHeightChange = onDynamicHeightChange
     )
 }
 
@@ -95,10 +100,9 @@ fun SummarySheet(
 private fun RevertableSheetItemCard(
     change: PendingChange,
     viewMode: SummaryViewMode,
-    onRevert: () -> Unit,
-    modifier: Modifier = Modifier
+    onRevert: () -> Unit
 ) {
-    Box(modifier = modifier) {
+    Box {
         SheetItemCard(
             item = change.item,
             viewMode = viewMode,
@@ -122,6 +126,51 @@ private fun RevertableSheetItemCard(
     }
 }
 
+private const val LIST_MODE_THRESHOLD = 8
+private const val GRID_MODE_THRESHOLD = 8
+private const val COMPACT_MODE_THRESHOLD = 9
+
+@Composable
+private fun calculateRowCount(
+    viewMode: SummaryViewMode,
+    pendingChanges: List<PendingChange>,
+    groupedMoves: List<Pair<String, List<PendingChange>>>,
+    toDelete: List<PendingChange>,
+    toKeep: List<PendingChange>,
+    toConvert: List<PendingChange>
+): Int {
+    var rowCount: Double = 0.0
+
+    // 1. Calculate headers size, weighted at 0.5 per header
+    if (groupedMoves.isNotEmpty()) rowCount += groupedMoves.size * 0.5
+    if (toDelete.isNotEmpty()) rowCount += 0.5
+    if (toKeep.isNotEmpty()) rowCount += 0.5
+    if (toConvert.isNotEmpty()) rowCount += 0.5
+
+    // 2. Count item rows based on mode
+    when (viewMode) {
+        SummaryViewMode.LIST -> {
+            rowCount += pendingChanges.size
+        }
+        SummaryViewMode.GRID -> {
+            val columns = 4.0
+            groupedMoves.forEach { (_, changes) -> rowCount += ceil(changes.size / columns) }
+            rowCount += ceil(toDelete.size / columns)
+            rowCount += ceil(toKeep.size / columns)
+            rowCount += ceil(toConvert.size / columns)
+        }
+        SummaryViewMode.COMPACT -> {
+            val columns = 8.0
+            groupedMoves.forEach { (_, changes) -> rowCount += ceil(changes.size / columns) }
+            rowCount += ceil(toDelete.size / columns)
+            rowCount += ceil(toKeep.size / columns)
+            rowCount += ceil(toConvert.size / columns)
+        }
+    }
+    return ceil(rowCount).toInt()
+}
+
+
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 private fun SummarySheetContent(
@@ -139,17 +188,41 @@ private fun SummarySheetContent(
     onResetChanges: () -> Unit,
     onRevertChange: (PendingChange) -> Unit,
     applyChangesButtonLabel: String,
-    sheetScrollState: LazyListState
+    sheetScrollState: LazyListState,
+    isMaximized: Boolean,
+    onDynamicHeightChange: (Boolean) -> Unit
 ) {
-    val isUsingGestureNav = rememberIsUsingGestureNavigation()
-    val bottomPadding = if (isUsingGestureNav) 16.dp else 32.dp
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
 
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .wrapContentHeight()
-        .padding(vertical = 8.dp)) {
+    val threshold = when (viewMode) {
+        SummaryViewMode.LIST -> LIST_MODE_THRESHOLD
+        SummaryViewMode.GRID -> GRID_MODE_THRESHOLD
+        SummaryViewMode.COMPACT -> COMPACT_MODE_THRESHOLD
+    }
+
+    val totalRowCount = calculateRowCount(
+        viewMode = viewMode,
+        pendingChanges = pendingChanges,
+        groupedMoves = groupedMoves,
+        toDelete = toDelete,
+        toKeep = toKeep,
+        toConvert = toConvert
+    )
+
+    val shouldMaximize = isMaximized && totalRowCount > threshold
+
+    LaunchedEffect(shouldMaximize) {
+        onDynamicHeightChange(shouldMaximize)
+    }
+
+    val containerModifier = if (shouldMaximize) {
+        Modifier.fillMaxSize().padding(vertical = 8.dp)
+    } else {
+        Modifier.fillMaxWidth().wrapContentHeight().padding(vertical = 8.dp)
+    }
+
+    Column(modifier = containerModifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -171,13 +244,19 @@ private fun SummarySheetContent(
         }
 
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.65f) // Set a max height
-                .wrapContentHeight(Alignment.Top, unbounded = false) // Wrap content within the max height
+            modifier = if (shouldMaximize) {
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = screenHeight * 0.65f)
+                    .wrapContentHeight(Alignment.Top)
+            }
         ) {
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(), // Removed fillMaxSize
+                modifier = Modifier.fillMaxWidth(),
                 state = sheetScrollState,
                 contentPadding = PaddingValues(horizontal = 16.dp)
             ) {
@@ -203,12 +282,13 @@ private fun SummarySheetContent(
                                 for (i in 0 until columns) {
                                     val change = row.getOrNull(i)
                                     if (change != null) {
-                                        RevertableSheetItemCard(
-                                            change = change,
-                                            viewMode = viewMode,
-                                            onRevert = { onRevertChange(change) },
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            RevertableSheetItemCard(
+                                                change = change,
+                                                viewMode = viewMode,
+                                                onRevert = { onRevertChange(change) }
+                                            )
+                                        }
                                     } else {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -236,12 +316,13 @@ private fun SummarySheetContent(
                                 for (i in 0 until columns) {
                                     val change = row.getOrNull(i)
                                     if (change != null) {
-                                        RevertableSheetItemCard(
-                                            change = change,
-                                            viewMode = viewMode,
-                                            onRevert = { onRevertChange(change) },
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            RevertableSheetItemCard(
+                                                change = change,
+                                                viewMode = viewMode,
+                                                onRevert = { onRevertChange(change) }
+                                            )
+                                        }
                                     } else {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -269,12 +350,13 @@ private fun SummarySheetContent(
                                 for (i in 0 until columns) {
                                     val change = row.getOrNull(i)
                                     if (change != null) {
-                                        RevertableSheetItemCard(
-                                            change = change,
-                                            viewMode = viewMode,
-                                            onRevert = { onRevertChange(change) },
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            RevertableSheetItemCard(
+                                                change = change,
+                                                viewMode = viewMode,
+                                                onRevert = { onRevertChange(change) }
+                                            )
+                                        }
                                     } else {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -302,12 +384,13 @@ private fun SummarySheetContent(
                                 for (i in 0 until columns) {
                                     val change = row.getOrNull(i)
                                     if (change != null) {
-                                        RevertableSheetItemCard(
-                                            change = change,
-                                            viewMode = viewMode,
-                                            onRevert = { onRevertChange(change) },
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            RevertableSheetItemCard(
+                                                change = change,
+                                                viewMode = viewMode,
+                                                onRevert = { onRevertChange(change) }
+                                            )
+                                        }
                                     } else {
                                         Spacer(modifier = Modifier.weight(1f))
                                     }
@@ -329,7 +412,7 @@ private fun SummarySheetContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .padding(top = 16.dp, bottom = bottomPadding),
+                .padding(top = 16.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val cancelButtonText = if (pendingChanges.size <= 1) "Cancel" else "Cancel All"

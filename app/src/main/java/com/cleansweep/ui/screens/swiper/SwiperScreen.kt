@@ -119,7 +119,7 @@ fun SwiperScreen(
     val swipeSensitivity by viewModel.swipeSensitivity.collectAsState()
     val folderBarLayout by viewModel.folderBarLayout.collectAsState()
     val folderNameLayout by viewModel.folderNameLayout.collectAsState()
-    val expandSummarySheet by viewModel.expandSummarySheet.collectAsState()
+    val skipPartialExpansion by viewModel.skipPartialExpansion.collectAsState()
     val screenshotDeletesVideo by viewModel.screenshotDeletesVideo.collectAsState()
     val addFolderFocusTarget by viewModel.addFolderFocusTarget.collectAsState()
     val addFavoriteToTargetByDefault by viewModel.addFavoriteToTargetByDefault.collectAsState()
@@ -129,6 +129,7 @@ fun SwiperScreen(
     val isExpandedScreen = windowSizeClass.widthSizeClass > WindowWidthSizeClass.Compact
     val folderSearchState by viewModel.folderSearchManager.state.collectAsState()
     val focusRequester = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
 
     BackHandler {
         viewModel.onNavigateUp()
@@ -495,7 +496,7 @@ fun SwiperScreen(
             )
         }
         if (uiState.showSummarySheet) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = expandSummarySheet)
+            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = skipPartialExpansion)
             val summaryListState = rememberLazyListState()
             val isAmoled = uiState.currentTheme == AppTheme.AMOLED
             val containerColor = if (isAmoled) {
@@ -533,7 +534,21 @@ fun SwiperScreen(
                     viewMode = uiState.summaryViewMode,
                     onToggleViewMode = viewModel::toggleSummaryViewMode,
                     applyChangesButtonLabel = uiState.applyChangesButtonLabel,
-                    sheetScrollState = summaryListState
+                    sheetScrollState = summaryListState,
+                    isMaximized = uiState.useFullScreenSummarySheet,
+                    onDynamicHeightChange = { shouldBeMaximized ->
+                        scope.launch {
+                            if (shouldBeMaximized) {
+                                if (sheetState.currentValue != SheetValue.Expanded) {
+                                    sheetState.expand()
+                                }
+                            } else {
+                                if (sheetState.currentValue == SheetValue.Expanded) {
+                                    sheetState.show()
+                                }
+                            }
+                        }
+                    }
                 )
             }
         }

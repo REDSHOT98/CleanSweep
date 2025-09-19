@@ -175,12 +175,20 @@ class SettingsViewModel @Inject constructor(
                 initialValue = false
             )
 
-    val expandSummarySheet: StateFlow<Boolean> =
-        preferencesRepository.expandSummarySheetFlow
+    val skipPartialExpansion: StateFlow<Boolean> =
+        preferencesRepository.skipPartialExpansionFlow
             .stateIn(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = true
+            )
+
+    val useFullScreenSummarySheet: StateFlow<Boolean> =
+        preferencesRepository.useFullScreenSummarySheetFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = false
             )
 
     val folderBarLayout: StateFlow<FolderBarLayout> =
@@ -512,9 +520,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setExpandSummarySheet(enabled: Boolean) {
+    fun onSkipPartialExpansionChanged(enabled: Boolean) {
         viewModelScope.launch {
-            preferencesRepository.setExpandSummarySheet(enabled)
+            preferencesRepository.setSkipPartialExpansion(enabled)
+        }
+    }
+
+    fun onUseFullScreenSummarySheetChanged(useFullScreen: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setUseFullScreenSummarySheet(useFullScreen)
         }
     }
 

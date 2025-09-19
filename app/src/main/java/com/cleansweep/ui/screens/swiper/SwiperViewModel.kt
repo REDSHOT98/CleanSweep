@@ -110,6 +110,7 @@ data class SwiperUiState(
     val isCurrentItemPendingConversion: Boolean = false,
     val isSkipButtonHidden: Boolean = true,
     val sessionSkippedCount: Int = 0,
+    val useFullScreenSummarySheet: Boolean = false,
 
     // Pre-processed lists for Summary Sheet performance
     val toDelete: List<PendingChange> = emptyList(),
@@ -162,8 +163,8 @@ class SwiperViewModel @Inject constructor(
         preferencesRepository.folderNameLayoutFlow
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FolderNameLayout.ABOVE)
 
-    val expandSummarySheet: StateFlow<Boolean> =
-        preferencesRepository.expandSummarySheetFlow
+    val skipPartialExpansion: StateFlow<Boolean> =
+        preferencesRepository.skipPartialExpansionFlow
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val addFolderFocusTarget: StateFlow<AddFolderFocusTarget> =
@@ -338,6 +339,11 @@ class SwiperViewModel @Inject constructor(
         viewModelScope.launch {
             preferencesRepository.hideSkipButtonFlow.collectLatest { isHidden ->
                 _uiState.update { it.copy(isSkipButtonHidden = isHidden) }
+            }
+        }
+        viewModelScope.launch {
+            preferencesRepository.useFullScreenSummarySheetFlow.collect { useFullScreen ->
+                _uiState.update { it.copy(useFullScreenSummarySheet = useFullScreen) }
             }
         }
         viewModelScope.launch {

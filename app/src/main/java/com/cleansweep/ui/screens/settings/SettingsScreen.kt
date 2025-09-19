@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -94,7 +95,8 @@ fun SettingsScreen(
     val defaultPath by viewModel.defaultAlbumCreationPath.collectAsState()
     val showFavoritesInSetup by viewModel.showFavoritesInSetup.collectAsState()
     val searchAutofocusEnabled by viewModel.searchAutofocusEnabled.collectAsState()
-    val expandSummarySheet by viewModel.expandSummarySheet.collectAsState()
+    val skipPartialExpansion by viewModel.skipPartialExpansion.collectAsState()
+    val useFullScreenSummarySheet by viewModel.useFullScreenSummarySheet.collectAsState()
     val folderBarLayout by viewModel.folderBarLayout.collectAsState()
     val folderNameLayout by viewModel.folderNameLayout.collectAsState()
     val useLegacyFolderIcons by viewModel.useLegacyFolderIcons.collectAsState()
@@ -292,12 +294,19 @@ fun SettingsScreen(
                                     }
                                 })
                         },
-                        SettingItem(keywords = listOf("always expand summary", "review changes sheet")) {
+                        SettingItem(keywords = listOf("skip partial expansion", "review changes sheet", "animation")) {
                             SettingSwitch(
-                                title = "Always Expand Summary",
-                                description = "Open the 'Review Changes' sheet fully expanded by default.",
-                                checked = expandSummarySheet,
-                                onCheckedChange = { viewModel.setExpandSummarySheet(it) })
+                                title = "Skip Partial Expansion",
+                                description = "The summary sheet will open directly to its full size.",
+                                checked = skipPartialExpansion,
+                                onCheckedChange = { viewModel.onSkipPartialExpansionChanged(it) })
+                        },
+                        SettingItem(keywords = listOf("use full-screen summary", "maximize", "height")) {
+                            SettingSwitch(
+                                title = "Use Full-Screen Summary",
+                                description = "When enabled, the sheet's maximum height will fill the screen when needed.",
+                                checked = useFullScreenSummarySheet,
+                                onCheckedChange = { viewModel.onUseFullScreenSummarySheetChanged(it) })
                         }
                     )
                 ),

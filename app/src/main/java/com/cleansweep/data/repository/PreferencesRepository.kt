@@ -88,7 +88,8 @@ class PreferencesRepository @Inject constructor(
         val TARGET_FAVORITE_FOLDERS = stringPreferencesKey("target_favorite_folders")
         val SHOW_FAVORITES_FIRST_IN_SETUP = booleanPreferencesKey("show_favorites_first_in_setup")
         val SEARCH_AUTOFOCUS_ENABLED = booleanPreferencesKey("search_autofocus_enabled")
-        val EXPAND_SUMMARY_SHEET = booleanPreferencesKey("expand_summary_sheet")
+        val SKIP_PARTIAL_EXPANSION = booleanPreferencesKey("expand_summary_sheet") // Renamed, key kept for migration
+        val USE_FULL_SCREEN_SUMMARY_SHEET = booleanPreferencesKey("use_full_screen_summary_sheet")
         val FOLDER_BAR_LAYOUT = stringPreferencesKey("folder_bar_layout")
         val FOLDER_NAME_LAYOUT = stringPreferencesKey("folder_name_layout")
         val USE_LEGACY_FOLDER_ICONS = booleanPreferencesKey("use_legacy_folder_icons")
@@ -268,9 +269,14 @@ class PreferencesRepository @Inject constructor(
             preferences[PreferencesKeys.SEARCH_AUTOFOCUS_ENABLED] ?: false
         }
 
-    val expandSummarySheetFlow: Flow<Boolean> = context.dataStore.data
+    val skipPartialExpansionFlow: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
-            preferences[PreferencesKeys.EXPAND_SUMMARY_SHEET] ?: true
+            preferences[PreferencesKeys.SKIP_PARTIAL_EXPANSION] ?: true
+        }
+
+    val useFullScreenSummarySheetFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.USE_FULL_SCREEN_SUMMARY_SHEET] ?: false
         }
 
     val folderBarLayoutFlow: Flow<FolderBarLayout> = context.dataStore.data
@@ -586,9 +592,15 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
-    suspend fun setExpandSummarySheet(enabled: Boolean) {
+    suspend fun setSkipPartialExpansion(enabled: Boolean) {
         context.dataStore.edit { preferences ->
-            preferences[PreferencesKeys.EXPAND_SUMMARY_SHEET] = enabled
+            preferences[PreferencesKeys.SKIP_PARTIAL_EXPANSION] = enabled
+        }
+    }
+
+    suspend fun setUseFullScreenSummarySheet(useFullScreen: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.USE_FULL_SCREEN_SUMMARY_SHEET] = useFullScreen
         }
     }
 
