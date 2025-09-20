@@ -79,6 +79,12 @@ enum class SimilarityThresholdLevel {
     LOOSE
 }
 
+enum class DuplicateScanScope {
+    ALL_FILES,
+    INCLUDE_LIST,
+    EXCLUDE_LIST
+}
+
 
 @Singleton
 class PreferencesRepository @Inject constructor(
@@ -124,6 +130,9 @@ class PreferencesRepository @Inject constructor(
         val SCREENSHOT_JPEG_QUALITY = stringPreferencesKey("screenshot_jpeg_quality")
         val SIMILARITY_THRESHOLD_LEVEL = stringPreferencesKey("similarity_threshold_level")
         val HIDE_SWIPER_SKIP_BUTTON = booleanPreferencesKey("hide_swiper_skip_button")
+        val DUPLICATE_SCAN_SCOPE = stringPreferencesKey("duplicate_scan_scope")
+        val DUPLICATE_SCAN_INCLUDE_LIST = stringPreferencesKey("duplicate_scan_include_list")
+        val DUPLICATE_SCAN_EXCLUDE_LIST = stringPreferencesKey("duplicate_scan_exclude_list")
 
         val DEFAULT_VIDEO_SPEED = floatPreferencesKey("default_video_speed")
 
@@ -372,6 +381,29 @@ class PreferencesRepository @Inject constructor(
                 SimilarityThresholdLevel.BALANCED
             }
         }
+
+    val duplicateScanScopeFlow: Flow<DuplicateScanScope> = context.dataStore.data
+        .map { preferences ->
+            val scopeName = preferences[PreferencesKeys.DUPLICATE_SCAN_SCOPE] ?: DuplicateScanScope.ALL_FILES.name
+            try {
+                DuplicateScanScope.valueOf(scopeName)
+            } catch (e: IllegalArgumentException) {
+                DuplicateScanScope.ALL_FILES
+            }
+        }
+
+    val duplicateScanIncludeListFlow: Flow<Set<String>> = context.dataStore.data
+        .map { preferences ->
+            val listString = preferences[PreferencesKeys.DUPLICATE_SCAN_INCLUDE_LIST] ?: ""
+            if (listString.isEmpty()) emptySet() else listString.split(",").filter { it.isNotBlank() }.toSet()
+        }
+
+    val duplicateScanExcludeListFlow: Flow<Set<String>> = context.dataStore.data
+        .map { preferences ->
+            val listString = preferences[PreferencesKeys.DUPLICATE_SCAN_EXCLUDE_LIST] ?: ""
+            if (listString.isEmpty()) emptySet() else listString.split(",").filter { it.isNotBlank() }.toSet()
+        }
+
 
     // Dialog Confirmation Flows
     val showConfirmMarkAsSortedFlow: Flow<Boolean> = context.dataStore.data
@@ -681,6 +713,24 @@ class PreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setDuplicateScanScope(scope: DuplicateScanScope) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DUPLICATE_SCAN_SCOPE] = scope.name
+        }
+    }
+
+    suspend fun setDuplicateScanIncludeList(folders: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DUPLICATE_SCAN_INCLUDE_LIST] = folders.joinToString(",")
+        }
+    }
+
+    suspend fun setDuplicateScanExcludeList(folders: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.DUPLICATE_SCAN_EXCLUDE_LIST] = folders.joinToString(",")
+        }
+    }
+
     suspend fun setHasRunDuplicateScanOnce() {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.HAS_RUN_DUPLICATE_SCAN_ONCE] = true
@@ -694,13 +744,19 @@ class PreferencesRepository @Inject constructor(
                 PreferencesKeys.TARGET_FAVORITE_FOLDERS,
                 PreferencesKeys.PREVIOUS_BUCKETS,
                 KEY_DEFAULT_ALBUM_PATH,
-                PreferencesKeys.PERMANENTLY_SORTED_FOLDERS
+                PreferencesKeys.PERMANENTLY_SORTED_FOLDERS,
+                PreferencesKeys.DUPLICATE_SCAN_INCLUDE_LIST,
+                PreferencesKeys.DUPLICATE_SCAN_EXCLUDE_LIST
             )
 
             keysToUpdate.forEach { key ->
                 val currentValue = preferences[key]
                 if (currentValue != null && currentValue.contains(oldPath)) {
-                    preferences[key] = currentValue.replace(oldPath, newPath)
+                    // Use a more robust replacement to avoid partial matches
+                    val pathSet = currentValue.split(',').map {
+                        if (it == oldPath) newPath else it
+                    }.toSet()
+                    preferences[key] = pathSet.joinToString(",")
                 }
             }
         }

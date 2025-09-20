@@ -26,6 +26,7 @@ import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cleansweep.data.repository.AddFolderFocusTarget
+import com.cleansweep.data.repository.DuplicateScanScope
 import com.cleansweep.data.repository.FolderBarLayout
 import com.cleansweep.data.repository.FolderNameLayout
 import com.cleansweep.data.repository.FolderSelectionMode
@@ -81,7 +82,10 @@ data class SettingsUiState(
     val showConfirmSimilarityChangeDialog: Boolean = false,
     val pendingSimilarityLevel: SimilarityThresholdLevel? = null,
     val isSearchActive: Boolean = false,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    val showDuplicateScanScopeDialog: Boolean = false,
+    val showDuplicateScanScopeFolderSearch: Boolean = false,
+    val isSearchingForIncludeList: Boolean = true
 )
 
 @HiltViewModel
@@ -294,6 +298,30 @@ class SettingsViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = SimilarityThresholdLevel.BALANCED
+            )
+
+    val duplicateScanScope: StateFlow<DuplicateScanScope> =
+        preferencesRepository.duplicateScanScopeFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = DuplicateScanScope.ALL_FILES
+            )
+
+    val duplicateScanIncludeList: StateFlow<Set<String>> =
+        preferencesRepository.duplicateScanIncludeListFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptySet()
+            )
+
+    val duplicateScanExcludeList: StateFlow<Set<String>> =
+        preferencesRepository.duplicateScanExcludeListFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptySet()
             )
 
 
@@ -851,7 +879,11 @@ class SettingsViewModel @Inject constructor(
 
     fun dismissFolderSearchDialog() {
         folderSearchManager.reset()
-        _uiState.update { it.copy(showDefaultPathSearchDialog = false, showForgetMediaSearchDialog = false) }
+        _uiState.update { it.copy(
+            showDefaultPathSearchDialog = false,
+            showForgetMediaSearchDialog = false,
+            showDuplicateScanScopeFolderSearch = false
+        ) }
     }
 
     fun confirmDefaultPathSelection() {
@@ -937,5 +969,65 @@ class SettingsViewModel @Inject constructor(
 
     fun toastMessageShown() {
         _uiState.update { it.copy(toastMessage = null) }
+    }
+
+    // --- Duplicate Scan Scope ---
+    fun showDuplicateScanScopeDialog() {
+        _uiState.update { it.copy(showDuplicateScanScopeDialog = true) }
+    }
+
+    fun dismissDuplicateScanScopeDialog() {
+        _uiState.update { it.copy(showDuplicateScanScopeDialog = false) }
+    }
+
+    fun setDuplicateScanScope(scope: DuplicateScanScope) {
+        viewModelScope.launch {
+            preferencesRepository.setDuplicateScanScope(scope)
+        }
+    }
+
+    fun showDuplicateScanScopeFolderSearch(isForIncludeList: Boolean) {
+        viewModelScope.launch {
+            val currentList = if (isForIncludeList) {
+                duplicateScanIncludeList.value
+            } else {
+                duplicateScanExcludeList.value
+            }
+            folderSearchManager.prepareForSearch(
+                initialPath = null,
+                coroutineScope = viewModelScope,
+                excludedFolders = currentList
+            )
+            _uiState.update { it.copy(
+                showDuplicateScanScopeFolderSearch = true,
+                isSearchingForIncludeList = isForIncludeList
+            ) }
+        }
+    }
+
+    fun addFolderToScanScopeList(path: String) {
+        viewModelScope.launch {
+            if (_uiState.value.isSearchingForIncludeList) {
+                val newList = duplicateScanIncludeList.value.toMutableSet().apply { add(path) }
+                preferencesRepository.setDuplicateScanIncludeList(newList)
+            } else {
+                val newList = duplicateScanExcludeList.value.toMutableSet().apply { add(path) }
+                preferencesRepository.setDuplicateScanExcludeList(newList)
+            }
+        }
+        dismissFolderSearchDialog()
+    }
+
+    fun removeFolderFromScanScopeList(path: String) {
+        viewModelScope.launch {
+            val scope = duplicateScanScope.value
+            if (scope == DuplicateScanScope.INCLUDE_LIST) {
+                val newList = duplicateScanIncludeList.value.toMutableSet().apply { remove(path) }
+                preferencesRepository.setDuplicateScanIncludeList(newList)
+            } else if (scope == DuplicateScanScope.EXCLUDE_LIST) {
+                val newList = duplicateScanExcludeList.value.toMutableSet().apply { remove(path) }
+                preferencesRepository.setDuplicateScanExcludeList(newList)
+            }
+        }
     }
 }

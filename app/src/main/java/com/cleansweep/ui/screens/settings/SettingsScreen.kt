@@ -29,6 +29,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,8 +39,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -58,12 +62,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cleansweep.data.repository.AddFolderFocusTarget
+import com.cleansweep.data.repository.DuplicateScanScope
 import com.cleansweep.data.repository.FolderBarLayout
 import com.cleansweep.data.repository.FolderNameLayout
 import com.cleansweep.data.repository.FolderSelectionMode
@@ -126,6 +132,11 @@ fun SettingsScreen(
     val screenshotDeletesVideo by viewModel.screenshotDeletesVideo.collectAsState()
     val screenshotJpegQuality by viewModel.screenshotJpegQuality.collectAsState()
     val similarityThresholdLevel by viewModel.similarityThresholdLevel.collectAsState()
+
+    // Duplicate Scan Scope states
+    val duplicateScanScope by viewModel.duplicateScanScope.collectAsState()
+    val duplicateScanIncludeList by viewModel.duplicateScanIncludeList.collectAsState()
+    val duplicateScanExcludeList by viewModel.duplicateScanExcludeList.collectAsState()
 
     val context = LocalContext.current
     LaunchedEffect(uiState.toastMessage) {
@@ -377,15 +388,6 @@ fun SettingsScreen(
                                 }
                             )
                         },
-                        SettingItem(keywords = listOf("similarity level", "duplicates", "strict", "balanced", "loose")) {
-                            ExposedDropdownMenu(
-                                title = "Similarity Level",
-                                description = getSimilarityLevelDescription(similarityThresholdLevel),
-                                options = SimilarityThresholdLevel.entries,
-                                selectedOption = similarityThresholdLevel,
-                                onOptionSelected = { viewModel.setSimilarityThresholdLevel(it) },
-                                getDisplayName = { getSimilarityLevelDisplayName(it) })
-                        },
                         SettingItem(keywords = listOf("folder selection mode", "all", "remember", "none")) {
                             ExposedDropdownMenu(
                                 title = "Folder Selection Mode",
@@ -465,6 +467,53 @@ fun SettingsScreen(
                                 description = "Autofocus on search bar when opening the app",
                                 checked = searchAutofocusEnabled,
                                 onCheckedChange = { viewModel.setSearchAutofocusEnabled(it) })
+                        }
+                    )
+                ),
+                SettingSection(
+                    title = "Duplicate Finder",
+                    items = listOf(
+                        SettingItem(keywords = listOf("similarity level", "duplicates", "strict", "balanced", "loose")) {
+                            ExposedDropdownMenu(
+                                title = "Similarity Level",
+                                description = getSimilarityLevelDescription(similarityThresholdLevel),
+                                options = SimilarityThresholdLevel.entries,
+                                selectedOption = similarityThresholdLevel,
+                                onOptionSelected = { viewModel.setSimilarityThresholdLevel(it) },
+                                getDisplayName = { getSimilarityLevelDisplayName(it) })
+                        },
+                        SettingItem(keywords = listOf("scan scope", "include", "exclude", "whitelist", "blacklist")) {
+                            ExposedDropdownMenu(
+                                title = "Scan Scope",
+                                description = getScanScopeDescription(duplicateScanScope, duplicateScanIncludeList, duplicateScanExcludeList),
+                                options = DuplicateScanScope.entries,
+                                selectedOption = duplicateScanScope,
+                                onOptionSelected = { viewModel.setDuplicateScanScope(it) },
+                                getDisplayName = { getScanScopeDisplayName(it) }
+                            )
+                        },
+                        SettingItem(keywords = listOf("manage list", "folders", "include", "exclude")) {
+                            AnimatedVisibility(
+                                visible = duplicateScanScope != DuplicateScanScope.ALL_FILES,
+                                enter = fadeIn(),
+                                exit = fadeOut()
+                            ) {
+                                val (title, list) = if (duplicateScanScope == DuplicateScanScope.INCLUDE_LIST) {
+                                    "Manage Include List" to duplicateScanIncludeList
+                                } else {
+                                    "Manage Exclude List" to duplicateScanExcludeList
+                                }
+
+                                Column {
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedButton(
+                                        onClick = { viewModel.showDuplicateScanScopeDialog() },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("$title (${list.size})")
+                                    }
+                                }
+                            }
                         }
                     )
                 ),
@@ -744,6 +793,42 @@ fun SettingsScreen(
         )
     }
 
+    if (uiState.showDuplicateScanScopeDialog) {
+        val (title, list, isForInclude) = if (duplicateScanScope == DuplicateScanScope.INCLUDE_LIST) {
+            Triple("Manage Include List", duplicateScanIncludeList, true)
+        } else {
+            Triple("Manage Exclude List", duplicateScanExcludeList, false)
+        }
+        DuplicateScanScopeManagementDialog(
+            title = title,
+            folderList = list.toList(),
+            onDismiss = viewModel::dismissDuplicateScanScopeDialog,
+            onAddFolder = { viewModel.showDuplicateScanScopeFolderSearch(isForInclude) },
+            onRemoveFolder = viewModel::removeFolderFromScanScopeList
+        )
+    }
+
+    if (uiState.showDuplicateScanScopeFolderSearch) {
+        FolderSearchDialog(
+            state = folderSearchState,
+            title = "Select Folder",
+            searchLabel = "Search or enter path...",
+            confirmButtonText = "Select",
+            autoConfirmOnSelection = false,
+            onDismiss = viewModel::dismissFolderSearchDialog,
+            onQueryChanged = viewModel.folderSearchManager::updateSearchQuery,
+            onFolderSelected = viewModel::onPathSelected,
+            onConfirm = {
+                val selectedPath = folderSearchState.browsePath
+                if (selectedPath != null) {
+                    viewModel.addFolderToScanScopeList(selectedPath)
+                }
+            },
+            onSearch = { scope.launch { viewModel.folderSearchManager.selectSingleResultOrSelf() } },
+            formatListItemTitle = { formatPathForDisplay(it) }
+        )
+    }
+
 
     val missingFolders = uiState.missingImportedFolders
     if (missingFolders != null) {
@@ -905,6 +990,55 @@ private fun formatPathForDisplay(path: String): Pair<String, String> {
     return Pair(name, displayParent)
 }
 
+@Composable
+private fun DuplicateScanScopeManagementDialog(
+    title: String,
+    folderList: List<String>,
+    onDismiss: () -> Unit,
+    onAddFolder: () -> Unit,
+    onRemoveFolder: (String) -> Unit
+) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            if (folderList.isEmpty()) {
+                Text("No folders have been added to this list. The scan will run as if this setting were disabled.")
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+                    items(folderList) { path ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = ".../${path.takeLast(35)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { onRemoveFolder(path) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Remove folder")
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        buttons = {
+            OutlinedButton(onClick = onAddFolder) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Add Folder")
+            }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
 
 @Composable
 private fun MediaIndexingStatusItem(
@@ -1295,6 +1429,27 @@ private fun getSimilarityLevelDescription(level: SimilarityThresholdLevel): Stri
         SimilarityThresholdLevel.LOOSE -> "More matches, but may include unrelated media."
     }
 }
+
+private fun getScanScopeDisplayName(scope: DuplicateScanScope): String {
+    return when (scope) {
+        DuplicateScanScope.ALL_FILES -> "Scan All Files"
+        DuplicateScanScope.INCLUDE_LIST -> "Include Specific Folders"
+        DuplicateScanScope.EXCLUDE_LIST -> "Exclude Specific Folders"
+    }
+}
+
+private fun getScanScopeDescription(
+    scope: DuplicateScanScope,
+    includeList: Set<String>,
+    excludeList: Set<String>
+): String {
+    return when (scope) {
+        DuplicateScanScope.ALL_FILES -> "Scan all media on your device."
+        DuplicateScanScope.INCLUDE_LIST -> "Only scan media within the ${includeList.size} selected folders."
+        DuplicateScanScope.EXCLUDE_LIST -> "Scan all media except for the ${excludeList.size} selected folders."
+    }
+}
+
 
 private fun getFolderNameLayoutDisplayName(layout: FolderNameLayout): String {
     return when (layout) {

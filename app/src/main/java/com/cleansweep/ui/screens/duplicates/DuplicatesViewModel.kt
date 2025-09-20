@@ -25,6 +25,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cleansweep.BuildConfig
 import com.cleansweep.data.model.MediaItem
+import com.cleansweep.data.repository.DuplicateScanScope
 import com.cleansweep.data.repository.PreferencesRepository
 import com.cleansweep.domain.bus.FileModificationEvent
 import com.cleansweep.domain.bus.FileModificationEventBus
@@ -83,6 +84,10 @@ data class DuplicatesUiState(
     val detailedGroup: ScanResultGroup? = null,
     val detailViewColumnCount: Int = 2,
     val gridViewColumnCount: Int = 2,
+    // Scan Scope properties
+    val scanScope: DuplicateScanScope = DuplicateScanScope.ALL_FILES,
+    val includeList: Set<String> = emptySet(),
+    val excludeList: Set<String> = emptySet()
 )
 
 enum class ScanState {
@@ -148,6 +153,24 @@ class DuplicatesViewModel @Inject constructor(
                 _uiState.update { it.copy(hasRunDuplicateScanOnce = hasRun) }
             }
         }
+
+        // Collect Scan Scope settings
+        viewModelScope.launch {
+            preferencesRepository.duplicateScanScopeFlow.collect { scope ->
+                _uiState.update { it.copy(scanScope = scope) }
+            }
+        }
+        viewModelScope.launch {
+            preferencesRepository.duplicateScanIncludeListFlow.collect { list ->
+                _uiState.update { it.copy(includeList = list) }
+            }
+        }
+        viewModelScope.launch {
+            preferencesRepository.duplicateScanExcludeListFlow.collect { list ->
+                _uiState.update { it.copy(excludeList = list) }
+            }
+        }
+
 
         // One-time check for valid cache to show/hide the "Load" button
         viewModelScope.launch {

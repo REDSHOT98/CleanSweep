@@ -180,7 +180,8 @@ fun AppNavigation(
                     onNavigateUp = { navController.navigateUp() },
                     onNavigateToGroup = { groupId ->
                         navController.navigate(Screen.GroupDetails.createRoute(groupId))
-                    }
+                    },
+                    onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
                 )
             }
 

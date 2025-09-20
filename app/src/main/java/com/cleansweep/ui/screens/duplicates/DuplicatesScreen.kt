@@ -25,6 +25,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -43,7 +44,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ViewList
@@ -68,6 +71,7 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.cleansweep.data.model.MediaItem
+import com.cleansweep.data.repository.DuplicateScanScope
 import com.cleansweep.domain.model.DuplicateGroup
 import com.cleansweep.domain.model.ScanResultGroup
 import com.cleansweep.domain.model.SimilarGroup
@@ -85,7 +89,8 @@ private const val MAX_VISUAL_SCALE = 2.0f
 fun DuplicatesScreen(
     viewModel: DuplicatesViewModel,
     onNavigateUp: () -> Unit,
-    onNavigateToGroup: (String) -> Unit
+    onNavigateToGroup: (String) -> Unit,
+    onNavigateToSettings: () -> Unit,
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -243,10 +248,14 @@ fun DuplicatesScreen(
                     scanForSimilar = uiState.scanForSimilarMedia,
                     hasRunOnce = uiState.hasRunDuplicateScanOnce,
                     canLoadFromCache = uiState.canLoadFromCache,
+                    scanScope = uiState.scanScope,
+                    includeList = uiState.includeList,
+                    excludeList = uiState.excludeList,
                     onToggleExact = viewModel::toggleScanForExactDuplicates,
                     onToggleSimilar = viewModel::toggleScanForSimilarMedia,
                     onStartScan = startScanWithPermissionCheck,
-                    onLoadCachedResults = { viewModel.loadPersistedResults(isFallback = false) }
+                    onLoadCachedResults = { viewModel.loadPersistedResults(isFallback = false) },
+                    onNavigateToSettings = onNavigateToSettings
                 )
                 ScanState.Scanning,
                 ScanState.Cancelling -> {
@@ -511,14 +520,29 @@ private fun IdleView(
     scanForSimilar: Boolean,
     hasRunOnce: Boolean,
     canLoadFromCache: Boolean,
+    scanScope: DuplicateScanScope,
+    includeList: Set<String>,
+    excludeList: Set<String>,
     onToggleExact: () -> Unit,
     onToggleSimilar: () -> Unit,
     onStartScan: () -> Unit,
-    onLoadCachedResults: () -> Unit
+    onLoadCachedResults: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier
         .fillMaxWidth()
-        .padding(24.dp)) {
+        .padding(24.dp)
+        .verticalScroll(rememberScrollState())
+    ) {
+        ScanScopeInfoCard(
+            scanScope = scanScope,
+            includeList = includeList,
+            excludeList = excludeList,
+            onNavigateToSettings = onNavigateToSettings
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
             Column {
                 ScanTypeSelectorRow(
@@ -578,6 +602,92 @@ private fun IdleView(
                 modifier = Modifier.fillMaxWidth(0.8f)
             ) {
                 Text("View Last Scan Results")
+            }
+        }
+    }
+}
+
+@Composable
+fun ScanScopeInfoCard(
+    scanScope: DuplicateScanScope,
+    includeList: Set<String>,
+    excludeList: Set<String>,
+    onNavigateToSettings: () -> Unit
+) {
+    AnimatedVisibility(visible = scanScope != DuplicateScanScope.ALL_FILES) {
+        var expanded by remember { mutableStateOf(false) }
+
+        val (title, list) = if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
+            "Scan is limited to ${includeList.size} folder(s)." to includeList
+        } else {
+            "Scan will ignore ${excludeList.size} folder(s)." to excludeList
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded },
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.FilterAlt,
+                        contentDescription = "Scan Filter Active",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
+                AnimatedVisibility(visible = expanded) {
+                    Column(Modifier.padding(top = 12.dp)) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.5f)
+                        )
+                        if (list.isEmpty()) {
+                            Text(
+                                "No folders are in this list. Tap Manage to add some.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        } else {
+                            list.take(5).forEach { path ->
+                                Text(
+                                    text = "• .../${path.takeLast(35)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (list.size > 5) {
+                                Text(
+                                    text = "• ...and ${list.size - 5} more",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
+                        }
+                        TextButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.align(Alignment.End)
+                        ) {
+                            Text("Manage")
+                        }
+                    }
+                }
             }
         }
     }

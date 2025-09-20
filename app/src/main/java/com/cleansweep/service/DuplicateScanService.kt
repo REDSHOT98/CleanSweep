@@ -23,12 +23,16 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.LifecycleService
 import com.cleansweep.R
+import com.cleansweep.data.repository.DuplicateScanScope
 import com.cleansweep.data.repository.PreferencesRepository
 import com.cleansweep.domain.model.DuplicateGroup
 import com.cleansweep.domain.model.ScanResultGroup
@@ -47,6 +51,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -176,6 +181,56 @@ class DuplicateScanService : LifecycleService() {
         )
     }
 
+    private suspend fun validateAndFilterPaths(allPaths: List<String>): List<String> {
+        val scanScope = preferencesRepository.duplicateScanScopeFlow.first()
+        if (scanScope == DuplicateScanScope.ALL_FILES) {
+            return allPaths
+        }
+
+        val listToValidate = if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
+            preferencesRepository.duplicateScanIncludeListFlow.first()
+        } else {
+            preferencesRepository.duplicateScanExcludeListFlow.first()
+        }
+
+        if (listToValidate.isEmpty()) {
+            return allPaths // No rules to apply
+        }
+
+        val validPaths = listToValidate.filter { File(it).exists() }.toSet()
+        val removedCount = listToValidate.size - validPaths.size
+        if (removedCount > 0) {
+            Log.d("DuplicateScanService", "Removed $removedCount non-existent folders from scan scope settings.")
+            if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
+                preferencesRepository.setDuplicateScanIncludeList(validPaths)
+            } else {
+                preferencesRepository.setDuplicateScanExcludeList(validPaths)
+            }
+            val plural = if (removedCount > 1) "s" else ""
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(this, "Removed $removedCount non-existent folder$plural from scan scope settings.", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        if (validPaths.isEmpty()) {
+            return allPaths // No valid rules left to apply
+        }
+
+        return if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
+            allPaths.filter { path ->
+                validPaths.any { includePath ->
+                    path.startsWith(includePath)
+                }
+            }
+        } else { // EXCLUDE_LIST
+            allPaths.filterNot { path ->
+                validPaths.any { excludePath ->
+                    path.startsWith(excludePath)
+                }
+            }
+        }
+    }
+
     private fun startScan(scanForExact: Boolean, scanForSimilar: Boolean) {
         Log.d("DuplicateScanService", "startScan invoked.")
         scanJob = serviceScope.launch {
@@ -184,17 +239,6 @@ class DuplicateScanService : LifecycleService() {
             try {
                 // Quick check for immediate cancellation
                 ensureActive()
-
-                // Calculate dynamic timeout and acquire wakelock
-                val allPaths = mediaRepository.getAllMediaFilePaths()
-                val videoExtensions = setOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
-                val videoCount = allPaths.count { path ->
-                    videoExtensions.any { ext -> path.endsWith(ext, ignoreCase = true) }
-                }
-                val imageCount = allPaths.size - videoCount
-                // Heuristic: 2 min base + 150ms/image + 750ms/video
-                val timeout = 120_000L + (imageCount * 150L) + (videoCount * 750L)
-                acquireWakeLock(timeout)
 
                 // The ViewModel is the source of truth for the initial phase, which we read from the state holder
                 val tracker = ProgressTracker(100, 0, stateHolder.state.value.progressPhase ?: PHASE_PREPARING)
@@ -205,23 +249,35 @@ class DuplicateScanService : LifecycleService() {
                 val cachedUnreadableMap = cachedUnreadable.associateBy { it.filePath }
                 Log.d("DuplicateScanService", "Loaded ${cachedUnreadable.size} items from unreadable file cache.")
 
-                // --- Phase 1: Gathering ---
+                // --- Phase 1: Gathering & Filtering by Scope ---
                 tracker.setPhase(PHASE_GATHERING)
                 updateSharedProgress(tracker)
                 Log.d("DuplicateScanService", "Phase 1: Finding all media files.")
                 val allFileSystemPaths = mediaRepository.getAllMediaFilePaths()
+                val scopedPaths = validateAndFilterPaths(allFileSystemPaths.toList())
+                Log.d("DuplicateScanService", "Paths after scope filtering: ${scopedPaths.size}/${allFileSystemPaths.size}")
+
+                // Calculate dynamic timeout and acquire wakelock based on scoped paths
+                val videoExtensions = setOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
+                val videoCount = scopedPaths.count { path ->
+                    videoExtensions.any { ext -> path.endsWith(ext, ignoreCase = true) }
+                }
+                val imageCount = scopedPaths.size - videoCount
+                // Heuristic: 2 min base + 150ms/image + 750ms/video
+                val timeout = 120_000L + (imageCount * 150L) + (videoCount * 750L)
+                acquireWakeLock(timeout)
 
                 // Forceful cancellation check after blocking I/O
                 if (!isActive) throw CancellationException("Cancelled after gathering file paths.")
 
-                Log.d("DuplicateScanService", "Found ${allFileSystemPaths.size} total files from file system.")
+                Log.d("DuplicateScanService", "Found ${scopedPaths.size} total files from file system within scope.")
                 tracker.add(GATHERING_PROGRESS)
                 updateSharedProgress(tracker)
 
                 // --- Phase 2: Pre-filtering ---
                 tracker.setPhase(PHASE_FILTERING)
                 updateSharedProgress(tracker)
-                val filesToProcess = allFileSystemPaths
+                val filesToProcess = scopedPaths
                     .filterNot { HiddenFileFilter.isPathExcludedFromScan(it) }
                     .map { File(it) }
                     .filter { file ->

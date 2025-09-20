@@ -39,7 +39,7 @@ android {
         minSdk = 29
         targetSdk = 36
         versionCode = 1
-        versionName = "0.9.4"
+        versionName = "0.9.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -121,10 +121,10 @@ dependencies {
 
     // Core Android dependencies
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.3")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("androidx.activity:activity-compose:1.11.0")
-    implementation("androidx.lifecycle:lifecycle-service:2.9.3")
+    implementation("androidx.lifecycle:lifecycle-service:2.9.4")
 
     // WorkManager
     val work_version = "2.10.4"
@@ -139,7 +139,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.3.2")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
     implementation("androidx.navigation:navigation-compose:2.9.4")
     implementation("androidx.compose.material3:material3-window-size-class:1.3.2")
 
