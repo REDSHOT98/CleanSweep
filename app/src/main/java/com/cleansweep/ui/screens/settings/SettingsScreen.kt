@@ -62,10 +62,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cleansweep.data.repository.AddFolderFocusTarget
@@ -85,14 +90,56 @@ import java.io.File
 import java.text.NumberFormat
 import kotlin.math.roundToInt
 
-private data class SettingItem(
+@Composable
+private fun SettingsItem(
+    title: AnnotatedString,
+    summary: AnnotatedString,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null
+) {
+    val modifier = if (onClick != null || onLongClick != null) {
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onTap = { onClick?.invoke() },
+                onLongPress = { onLongClick?.invoke() }
+            )
+        }
+    } else Modifier
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(text = title, style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SettingsItem(
+    title: String,
+    summary: String,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null
+) {
+    SettingsItem(
+        title = AnnotatedString(title),
+        summary = AnnotatedString(summary),
+        onClick = onClick,
+        onLongClick = onLongClick
+    )
+}
+
+private data class SettingContent(
     val keywords: List<String>,
     val content: @Composable () -> Unit
 )
 
 private data class SettingSection(
     val title: String,
-    val items: List<SettingItem>
+    val items: List<SettingContent>
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -166,7 +213,6 @@ fun SettingsScreen(
     val focusRequester = remember { FocusRequester() }
 
     var showAboutSortMediaDialog by remember { mutableStateOf(false) }
-    val uriHandler = LocalUriHandler.current
 
 
     LaunchedEffect(uiState.isSearchActive) {
@@ -251,7 +297,7 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Appearance",
                     items = listOf(
-                        SettingItem(keywords = listOf("theme", "dark", "light", "amoled", "system")) {
+                        SettingContent(keywords = listOf("theme", "dark", "light", "amoled", "system")) {
                             ExposedDropdownMenu(
                                 title = "Theme",
                                 description = getThemeDescription(currentTheme),
@@ -260,7 +306,7 @@ fun SettingsScreen(
                                 onOptionSelected = { viewModel.setTheme(it) },
                                 getDisplayName = { getThemeDisplayName(it) })
                         },
-                        SettingItem(keywords = listOf("dynamic colors", "system theme", "material you")) {
+                        SettingContent(keywords = listOf("dynamic colors", "system theme", "material you")) {
                             SettingSwitch(
                                 title = "Use Dynamic Colors",
                                 description = if (supportsDynamicColors) "Use colors from your system theme" else "Requires Android 12 or newer",
@@ -269,7 +315,7 @@ fun SettingsScreen(
                                 enabled = supportsDynamicColors
                             )
                         },
-                        SettingItem(keywords = listOf("accent color", "customize colors")) {
+                        SettingContent(keywords = listOf("accent color", "customize colors")) {
                             AnimatedVisibility(visible = !useDynamicColors || !supportsDynamicColors) {
                                 AccentColorSetting(
                                     currentAccentKey = accentColorKey,
@@ -277,7 +323,7 @@ fun SettingsScreen(
                                 )
                             }
                         },
-                        SettingItem(keywords = listOf("folder name position", "above", "below", "hidden")) {
+                        SettingContent(keywords = listOf("folder name position", "above", "below", "hidden")) {
                             ExposedDropdownMenu(
                                 title = "Folder Name Position",
                                 description = "Choose where to display the current folder name on the sorting screen.",
@@ -287,28 +333,28 @@ fun SettingsScreen(
                                 getDisplayName = { getFolderNameLayoutDisplayName(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("compact folder view", "list style")) {
+                        SettingContent(keywords = listOf("compact folder view", "list style")) {
                             SettingSwitch(
                                 title = "Compact Folder View",
                                 description = "Show folders in a more compact list style",
                                 checked = compactFolderView,
                                 onCheckedChange = { viewModel.setCompactFolderView(it) })
                         },
-                        SettingItem(keywords = listOf("initial based folder icons", "legacy", "letter icon")) {
+                        SettingContent(keywords = listOf("initial based folder icons", "legacy", "letter icon")) {
                             SettingSwitch(
                                 title = "Use Initial-based Folder Icons",
                                 description = "Use the first letter of a folder's name as its icon",
                                 checked = useLegacyFolderIcons,
                                 onCheckedChange = { viewModel.setUseLegacyFolderIcons(it) })
                         },
-                        SettingItem(keywords = listOf("hide media filename", "overlay")) {
+                        SettingContent(keywords = listOf("hide media filename", "overlay")) {
                             SettingSwitch(
                                 title = "Hide Media Filename",
                                 description = "Hide the filename overlay on media cards",
                                 checked = hideFilename,
                                 onCheckedChange = { viewModel.setHideFilename(it) })
                         },
-                        SettingItem(keywords = listOf("folder bar layout", "horizontal", "vertical", "scrolling")) {
+                        SettingContent(keywords = listOf("folder bar layout", "horizontal", "vertical", "scrolling")) {
                             ExposedDropdownMenu(
                                 title = "Folder Bar Layout",
                                 description = "Choose the scrolling direction for the 'Move to' bar.",
@@ -322,14 +368,14 @@ fun SettingsScreen(
                                     }
                                 })
                         },
-                        SettingItem(keywords = listOf("skip partial expansion", "review changes sheet", "animation")) {
+                        SettingContent(keywords = listOf("skip partial expansion", "review changes sheet", "animation")) {
                             SettingSwitch(
                                 title = "Skip Partial Expansion",
                                 description = "The summary sheet will open directly to its full size.",
                                 checked = skipPartialExpansion,
                                 onCheckedChange = { viewModel.onSkipPartialExpansionChanged(it) })
                         },
-                        SettingItem(keywords = listOf("use full-screen summary", "maximize", "height")) {
+                        SettingContent(keywords = listOf("use full-screen summary", "maximize", "height")) {
                             SettingSwitch(
                                 title = "Use Full-Screen Summary",
                                 description = "When enabled, the sheet's maximum height will fill the screen when needed.",
@@ -341,7 +387,7 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Behavior",
                     items = listOf(
-                        SettingItem(keywords = listOf("swipe sensitivity", "low", "medium", "high")) {
+                        SettingContent(keywords = listOf("swipe sensitivity", "low", "medium", "high")) {
                             ExposedDropdownMenu(
                                 title = "Swipe Sensitivity",
                                 description = "Adjust how far you need to swipe to trigger an action.",
@@ -350,7 +396,7 @@ fun SettingsScreen(
                                 onOptionSelected = { viewModel.setSwipeSensitivity(it) },
                                 getDisplayName = { getSwipeSensitivityDisplayName(it) })
                         },
-                        SettingItem(keywords = listOf("default video speed", "playback")) {
+                        SettingContent(keywords = listOf("default video speed", "playback")) {
                             val videoSpeedOptions = listOf(1.0f, 1.5f, 2.0f)
                             ExposedDropdownMenu(
                                 title = "Default Video Speed",
@@ -361,7 +407,7 @@ fun SettingsScreen(
                                 getDisplayName = { speed -> "${speed}x" }
                             )
                         },
-                        SettingItem(keywords = listOf("screenshot also deletes original video")) {
+                        SettingContent(keywords = listOf("screenshot also deletes original video")) {
                             SettingSwitch(
                                 title = "Screenshot also deletes original video",
                                 description = "When taking a screenshot from a video, automatically queue the video for deletion.",
@@ -369,7 +415,7 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setScreenshotDeletesVideo(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("screenshot quality", "jpeg")) {
+                        SettingContent(keywords = listOf("screenshot quality", "jpeg")) {
                             val qualityOptions = listOf("95", "90", "85", "75")
                             ExposedDropdownMenu(
                                 title = "Screenshot Quality (JPEG)",
@@ -388,7 +434,7 @@ fun SettingsScreen(
                                 }
                             )
                         },
-                        SettingItem(keywords = listOf("folder selection mode", "all", "remember", "none")) {
+                        SettingContent(keywords = listOf("folder selection mode", "all", "remember", "none")) {
                             ExposedDropdownMenu(
                                 title = "Folder Selection Mode",
                                 description = getFolderSelectionModeDescription(folderSelectionMode),
@@ -397,14 +443,14 @@ fun SettingsScreen(
                                 onOptionSelected = { viewModel.setFolderSelectionMode(it) },
                                 getDisplayName = { getFolderSelectionModeDisplayName(it) })
                         },
-                        SettingItem(keywords = listOf("invert swipe actions", "left", "right", "keep", "delete")) {
+                        SettingContent(keywords = listOf("invert swipe actions", "left", "right", "keep", "delete")) {
                             SettingSwitch(
                                 title = "Invert Swipe Actions",
                                 description = "Invert the swipe actions: left to keep, right to delete",
                                 checked = invertSwipe,
                                 onCheckedChange = { viewModel.setInvertSwipe(it) })
                         },
-                        SettingItem(keywords = listOf("hide skip button")) {
+                        SettingContent(keywords = listOf("hide skip button")) {
                             SettingSwitch(
                                 title = "Hide Skip Button",
                                 description = "If enabled, the 'Skip' button will be hidden from the bottom bar.",
@@ -412,7 +458,7 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setHideSkipButton(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("add to favorites by default", "target folder")) {
+                        SettingContent(keywords = listOf("add to favorites by default", "target folder")) {
                             SettingSwitch(
                                 title = "Add to Favorites by Default",
                                 description = "Pre-select the 'Add to Favorites' toggle when adding a new target folder.",
@@ -420,7 +466,7 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setAddFavoriteToTargetByDefault(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("unfavorite also removes", "hide folder")) {
+                        SettingContent(keywords = listOf("unfavorite also removes", "hide folder")) {
                             SettingSwitch(
                                 title = "Unfavorite Also Removes",
                                 description = "If enabled, unfavoriting a folder also hides it for the session.",
@@ -428,7 +474,7 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setUnfavoriteRemovesFromBar(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("hint on existing folder name")) {
+                        SettingContent(keywords = listOf("hint on existing folder name")) {
                             SettingSwitch(
                                 title = "Hint on Existing Folder Name",
                                 description = "Show a hint if a folder with the same name exists while you type.",
@@ -436,7 +482,7 @@ fun SettingsScreen(
                                 onCheckedChange = { viewModel.setHintOnExistingFolderName(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("initial dialog focus", "search path", "folder name")) {
+                        SettingContent(keywords = listOf("initial dialog focus", "search path", "folder name")) {
                             ExposedDropdownMenu(
                                 title = "Initial Dialog Focus",
                                 description = "When adding a folder, choose which field gets focus first.",
@@ -445,23 +491,23 @@ fun SettingsScreen(
                                 onOptionSelected = { viewModel.setAddFolderFocusTarget(it) },
                                 getDisplayName = { getAddFolderFocusTargetDisplayName(it) })
                         },
-                        SettingItem(keywords = listOf("show favorites in setup")) {
+                        SettingContent(keywords = listOf("show favorites in setup")) {
                             SettingSwitch(
                                 title = "Show Favorites in Setup",
                                 description = "Show favorite folders during the setup process",
                                 checked = showFavoritesInSetup,
                                 onCheckedChange = { viewModel.setShowFavoritesInSetup(it) })
                         },
-                        SettingItem(keywords = listOf("default album location", "pictures", "dcim", "movies", "custom folder")) {
+                        SettingContent(keywords = listOf("default album location", "pictures", "dcim", "movies", "custom folder")) {
                             DefaultAlbumLocationSetting(viewModel, defaultPath, pathOptions)
                         },
-                        SettingItem(keywords = listOf("remember organized media", "skip media", "reset history")) {
+                        SettingContent(keywords = listOf("remember organized media", "skip media", "reset history")) {
                             RememberMediaSetting(viewModel, rememberProcessedMedia)
                         },
-                        SettingItem(keywords = listOf("forget sorted media", "reappear")) {
+                        SettingContent(keywords = listOf("forget sorted media", "reappear")) {
                             ForgetSortedMediaSetting(viewModel)
                         },
-                        SettingItem(keywords = listOf("search autofocus enabled", "search bar")) {
+                        SettingContent(keywords = listOf("search autofocus enabled", "search bar")) {
                             SettingSwitch(
                                 title = "Search Autofocus Enabled",
                                 description = "Autofocus on search bar when opening the app",
@@ -473,7 +519,7 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Duplicate Finder",
                     items = listOf(
-                        SettingItem(keywords = listOf("similarity level", "duplicates", "strict", "balanced", "loose")) {
+                        SettingContent(keywords = listOf("similarity level", "duplicates", "strict", "balanced", "loose")) {
                             ExposedDropdownMenu(
                                 title = "Similarity Level",
                                 description = getSimilarityLevelDescription(similarityThresholdLevel),
@@ -482,7 +528,7 @@ fun SettingsScreen(
                                 onOptionSelected = { viewModel.setSimilarityThresholdLevel(it) },
                                 getDisplayName = { getSimilarityLevelDisplayName(it) })
                         },
-                        SettingItem(keywords = listOf("scan scope", "include", "exclude", "whitelist", "blacklist")) {
+                        SettingContent(keywords = listOf("scan scope", "include", "exclude", "whitelist", "blacklist")) {
                             ExposedDropdownMenu(
                                 title = "Scan Scope",
                                 description = getScanScopeDescription(duplicateScanScope, duplicateScanIncludeList, duplicateScanExcludeList),
@@ -492,7 +538,7 @@ fun SettingsScreen(
                                 getDisplayName = { getScanScopeDisplayName(it) }
                             )
                         },
-                        SettingItem(keywords = listOf("manage list", "folders", "include", "exclude")) {
+                        SettingContent(keywords = listOf("manage list", "folders", "include", "exclude")) {
                             AnimatedVisibility(
                                 visible = duplicateScanScope != DuplicateScanScope.ALL_FILES,
                                 enter = fadeIn(),
@@ -520,7 +566,7 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Advanced",
                     items = listOf(
-                        SettingItem(keywords = listOf("media indexing status", "mediastore", "scan")) {
+                        SettingContent(keywords = listOf("media indexing status", "mediastore", "scan")) {
                             MediaIndexingStatusItem(
                                 status = uiState.indexingStatus,
                                 isStatusLoading = uiState.isIndexingStatusLoading,
@@ -529,52 +575,21 @@ fun SettingsScreen(
                                 onScan = viewModel::triggerFullScan
                             )
                         },
-                        SettingItem(keywords = listOf("export target favorites", "save", "backup")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        exportFavoritesLauncher.launch("cleansweep_target_favorites.json")
-                                    }
-                            ) {
-                                Text(
-                                    text = "Export Target Favorites",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Save your favorite target folders to a file.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                        SettingContent(keywords = listOf("export target favorites", "save", "backup")) {
+                            SettingsItem(
+                                title = "Export Target Favorites",
+                                summary = "Save your favorite target folders to a file.",
+                                onClick = { exportFavoritesLauncher.launch("cleansweep_target_favorites.json") }
+                            )
                         },
-                        SettingItem(keywords = listOf("import target favorites", "load", "restore")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        importFavoritesLauncher.launch(
-                                            arrayOf(
-                                                "application/json",
-                                                "text/plain"
-                                            )
-                                        )
-                                    }
-                            ) {
-                                Text(
-                                    text = "Import Target Favorites",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Load favorite target folders from a file.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                        SettingContent(keywords = listOf("import target favorites", "load", "restore")) {
+                            SettingsItem(
+                                title = "Import Target Favorites",
+                                summary = "Load favorite target folders from a file.",
+                                onClick = { importFavoritesLauncher.launch(arrayOf("application/json", "text/plain")) }
+                            )
                         },
-                        SettingItem(keywords = listOf("reset dialog warnings", "confirmation")) {
+                        SettingContent(keywords = listOf("reset dialog warnings", "confirmation")) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -605,7 +620,7 @@ fun SettingsScreen(
                 SettingSection(
                     title = "Help & Support",
                     items = listOf(
-                        SettingItem(keywords = listOf("onboarding tutorial", "replay", "help")) {
+                        SettingContent(keywords = listOf("onboarding tutorial", "replay", "help")) {
                             Column {
                                 Text("Onboarding Tutorial", style = MaterialTheme.typography.titleMedium)
                                 Spacer(modifier = Modifier.height(2.dp))
@@ -628,83 +643,49 @@ fun SettingsScreen(
                 SettingSection(
                     title = "About",
                     items = listOf(
-                        SettingItem(keywords = listOf("version", "build")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pointerInput(Unit) {
-                                        detectTapGestures(
-                                            onLongPress = {
-                                                viewModel.copyAppVersionToClipboard()
-                                            }
-                                        )
+                        SettingContent(keywords = listOf("version", "build")) {
+                            SettingsItem(
+                                title = "Version",
+                                summary = viewModel.appVersion,
+                                onLongClick = viewModel::copyAppVersionToClipboard
+                            )
+                        },
+                        SettingContent(keywords = listOf("about cleansweep", "info")) {
+                            SettingsItem(
+                                title = "About CleanSweep",
+                                summary = "Learn more about CleanSweep",
+                                onClick = { showAboutSortMediaDialog = true }
+                            )
+                        },
+                        SettingContent(keywords = listOf("gitlab", "source code")) {
+                            val uriHandler = LocalUriHandler.current
+                            SettingsItem(
+                                title = "GitLab",
+                                summary = "gitlab.com/LoopOtto/CleanSweep",
+                                onClick = { uriHandler.openUri("https://gitlab.com/LoopOtto/cleansweep") }
+                            )
+                        },
+                        SettingContent(keywords = listOf("github", "suspension", "source code")) {
+                            SettingsItem(
+                                title = buildAnnotatedString {
+                                    withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                                        append("GitHub")
                                     }
-                            ) {
-                                Text(
-                                    text = "Version",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = viewModel.appVersion,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                                },
+                                summary = buildAnnotatedString {
+                                    withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
+                                        append("github.com/LoopOtto/CleanSweep")
+                                    }
+                                },
+                                onClick = viewModel::showGitHubSuspensionDialog
+                            )
                         },
-                        SettingItem(keywords = listOf("about cleansweep", "info")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showAboutSortMediaDialog = true }
-                            ) {
-                                Text(
-                                    text = "About CleanSweep",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Learn more about CleanSweep",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        },
-                        SettingItem(keywords = listOf("github", "source code")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { uriHandler.openUri("https://github.com/loopotto/CleanSweep") }
-                            ) {
-                                Text(
-                                    text = "GitHub",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "github.com/loopotto/CleanSweep",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        },
-                        SettingItem(keywords = listOf("open-source licenses", "libraries")) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable(onClick = onNavigateToLibraries)
-                            ) {
-                                Text(
-                                    text = "Open-Source Licenses",
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "View open-source licenses",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                        SettingContent(keywords = listOf("open-source licenses", "libraries")) {
+                            SettingsItem(
+                                title = "Open-Source Licenses",
+                                summary = "View open-source licenses",
+                                onClick = onNavigateToLibraries
+                            )
                         }
                     )
                 )
@@ -791,6 +772,10 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+
+    if (uiState.showGitHubSuspensionDialog) {
+        GitHubSuspensionDialog(onDismiss = viewModel::dismissGitHubSuspensionDialog)
     }
 
     if (uiState.showDuplicateScanScopeDialog) {
@@ -975,11 +960,24 @@ fun SettingsScreen(
                 )
             },
             buttons = {
-                TextButton(onClick = { viewModel.dismissDialog("resetTarget") }) { Text("Cancel") }
-                Button(onClick = viewModel::confirmClearTargetFavorites) { Text("Reset") }
+                TextButton(onClick = { viewModel.dismissDialog("resetTarget") }) { Text("Reset") }
             }
         )
     }
+}
+
+@Composable
+private fun GitHubSuspensionDialog(onDismiss: () -> Unit) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("About GitHub...") },
+        text = { Text("We moved to GitLab because of a random and unjustified suspension on GitHub. We're hoping for a reply to our appeal and a formal explanation.") },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 private fun formatPathForDisplay(path: String): Pair<String, String> {
