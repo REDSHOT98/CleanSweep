@@ -39,6 +39,7 @@ import com.cleansweep.domain.model.ScanResultGroup
 import com.cleansweep.domain.model.SimilarGroup
 import com.cleansweep.domain.repository.DuplicatesRepository
 import com.cleansweep.domain.repository.MediaRepository
+import com.cleansweep.domain.repository.ScanScopeType
 import com.cleansweep.domain.usecase.DuplicateFinderUseCase
 import com.cleansweep.domain.usecase.SimilarFinderUseCase
 import com.cleansweep.domain.util.HiddenFileFilter
@@ -181,10 +182,10 @@ class DuplicateScanService : LifecycleService() {
         )
     }
 
-    private suspend fun validateAndFilterPaths(allPaths: List<String>): List<String> {
+    private suspend fun validateAndFilterPaths(allPaths: List<String>): Pair<List<String>, ScanScopeType> {
         val scanScope = preferencesRepository.duplicateScanScopeFlow.first()
         if (scanScope == DuplicateScanScope.ALL_FILES) {
-            return allPaths
+            return Pair(allPaths, ScanScopeType.FULL)
         }
 
         val listToValidate = if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
@@ -194,7 +195,7 @@ class DuplicateScanService : LifecycleService() {
         }
 
         if (listToValidate.isEmpty()) {
-            return allPaths // No rules to apply
+            return Pair(allPaths, ScanScopeType.FULL) // No rules to apply, treat as full scan
         }
 
         val validPaths = listToValidate.filter { File(it).exists() }.toSet()
@@ -213,10 +214,10 @@ class DuplicateScanService : LifecycleService() {
         }
 
         if (validPaths.isEmpty()) {
-            return allPaths // No valid rules left to apply
+            return Pair(allPaths, ScanScopeType.FULL) // No valid rules left to apply, treat as full scan
         }
 
-        return if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
+        val filteredPaths = if (scanScope == DuplicateScanScope.INCLUDE_LIST) {
             allPaths.filter { path ->
                 validPaths.any { includePath ->
                     path.startsWith(includePath)
@@ -229,12 +230,14 @@ class DuplicateScanService : LifecycleService() {
                 }
             }
         }
+        return Pair(filteredPaths, ScanScopeType.SCOPED)
     }
 
     private fun startScan(scanForExact: Boolean, scanForSimilar: Boolean) {
         Log.d("DuplicateScanService", "startScan invoked.")
         scanJob = serviceScope.launch {
             val allUnreadableOrUnscannableFiles = mutableSetOf<String>()
+            lateinit var scanScopeType: ScanScopeType
 
             try {
                 // Quick check for immediate cancellation
@@ -254,8 +257,10 @@ class DuplicateScanService : LifecycleService() {
                 updateSharedProgress(tracker)
                 Log.d("DuplicateScanService", "Phase 1: Finding all media files.")
                 val allFileSystemPaths = mediaRepository.getAllMediaFilePaths()
-                val scopedPaths = validateAndFilterPaths(allFileSystemPaths.toList())
-                Log.d("DuplicateScanService", "Paths after scope filtering: ${scopedPaths.size}/${allFileSystemPaths.size}")
+                val (scopedPaths, determinedScopeType) = validateAndFilterPaths(allFileSystemPaths.toList())
+                scanScopeType = determinedScopeType
+                Log.d("DuplicateScanService", "Scan scope is ${scanScopeType.name}. Paths after filtering: ${scopedPaths.size}/${allFileSystemPaths.size}")
+
 
                 // Calculate dynamic timeout and acquire wakelock based on scoped paths
                 val videoExtensions = setOf(".mp4", ".mkv", ".webm", ".3gp", ".mov")
@@ -394,13 +399,23 @@ class DuplicateScanService : LifecycleService() {
                     Log.d("DuplicateScanService", "Updated unreadable file cache with ${filesToCache.size} items.")
                 }
                 preferencesRepository.setHasRunDuplicateScanOnce()
-                stateHolder.setComplete(finalFilteredResults, allUnreadableOrUnscannableFiles.toList())
+
+                val completionTimestamp = System.currentTimeMillis()
+                stateHolder.setComplete(
+                    results = finalFilteredResults,
+                    unscannableFiles = allUnreadableOrUnscannableFiles.toList(),
+                    timestamp = completionTimestamp,
+                    scanScopeType = scanScopeType
+                )
 
                 // --- Persist the final results to the database ---
-                // *** This is the correct place to clear old results, just before saving new ones. ***
-                duplicatesRepository.clearAllScanResults()
-                duplicatesRepository.saveScanResults(finalFilteredResults, allUnreadableOrUnscannableFiles.toList())
-                Log.d("DuplicateScanService", "Saved final scan results to the database.")
+                duplicatesRepository.saveScanResults(
+                    groups = finalFilteredResults,
+                    unscannableFiles = allUnreadableOrUnscannableFiles.toList(),
+                    scopeType = scanScopeType,
+                    timestamp = completionTimestamp
+                )
+                Log.d("DuplicateScanService", "Saved final scan results to the database with scope: ${scanScopeType.name}.")
 
             } catch (e: Exception) {
                 if (e is CancellationException) {

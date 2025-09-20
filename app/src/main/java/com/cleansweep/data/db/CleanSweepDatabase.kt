@@ -20,6 +20,8 @@ package com.cleansweep.data.db
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.cleansweep.data.db.converter.Converters
 import com.cleansweep.data.db.dao.FileSignatureDao
 import com.cleansweep.data.db.dao.FolderDetailsDao
@@ -45,7 +47,7 @@ import com.cleansweep.data.db.entity.UnreadableFileCache
         MediaItemRefCacheEntry::class,
         UnreadableFileCache::class
     ],
-    version = 1,
+    version = 2,
     autoMigrations = [],
     exportSchema = true
 )
@@ -60,5 +62,13 @@ abstract class CleanSweepDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "cleansweep_db"
+
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Add the new scopeType column to the scan_result_groups table.
+                // We default to 'FULL' because any pre-existing cached data was from a full scan by definition.
+                db.execSQL("ALTER TABLE scan_result_groups ADD COLUMN scopeType TEXT NOT NULL DEFAULT 'FULL'")
+            }
+        }
     }
 }

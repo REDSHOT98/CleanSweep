@@ -32,14 +32,21 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
+enum class ScanScopeType {
+    FULL,
+    SCOPED
+}
+
 /**
  * A data class to hold the fully validated results loaded from the database.
  * @param timestamp The time the original scan was completed.
+ * @param scopeType The scope of the scan that produced these results.
  */
 data class PersistedScanResult(
     val groups: List<ScanResultGroup>,
     val unscannableFiles: List<String>,
-    val timestamp: Long
+    val timestamp: Long,
+    val scopeType: ScanScopeType
 )
 
 @Singleton
@@ -93,9 +100,10 @@ class DuplicatesRepository @Inject constructor(
     suspend fun saveScanResults(
         groups: List<ScanResultGroup>,
         unscannableFiles: List<String>,
+        scopeType: ScanScopeType,
         timestamp: Long? = null
     ) = withContext(Dispatchers.IO) {
-        scanResultCacheDao.saveScanResults(groups, unscannableFiles, timestamp)
+        scanResultCacheDao.saveScanResults(groups, unscannableFiles, scopeType, timestamp)
     }
 
     /**
@@ -104,7 +112,9 @@ class DuplicatesRepository @Inject constructor(
      */
     suspend fun hasValidCachedResults(): Boolean = withContext(Dispatchers.IO) {
         val loadedData = scanResultCacheDao.loadLatestScanResults() ?: return@withContext false
-        val (rawGroups, _) = loadedData // Unscannable files are ignored for this check
+        // The Pair contains the Triple and the scope. We only need the Triple for this check.
+        val (rawData, _) = loadedData
+        val (rawGroups, _) = rawData // Unscannable files are ignored for this check
 
         for (group in rawGroups) {
             val validatedItems = group.items.filter { isMediaItemStillValid(it) }
@@ -119,13 +129,14 @@ class DuplicatesRepository @Inject constructor(
 
     /**
      * Loads the latest scan results from the cache and performs a robust validation to ensure
-     * the files still exist and have not been modified.
+     * the files still exist and have not been modified. It prioritizes SCOPED results over FULL.
      *
      * @return A [PersistedScanResult] object if valid results are found, otherwise null.
      */
     suspend fun loadLatestScanResults(): PersistedScanResult? = withContext(Dispatchers.IO) {
         val loadedData = scanResultCacheDao.loadLatestScanResults() ?: return@withContext null
-        val (rawGroups, unscannableFiles, timestamp) = loadedData
+        val (rawData, scopeType) = loadedData
+        val (rawGroups, unscannableFiles, timestamp) = rawData
 
         val validatedGroups = rawGroups.mapNotNull { group ->
             val validatedItems = group.items.filter { isMediaItemStillValid(it) }
@@ -144,12 +155,17 @@ class DuplicatesRepository @Inject constructor(
         return@withContext PersistedScanResult(
             groups = validatedGroups,
             unscannableFiles = unscannableFiles,
-            timestamp = timestamp
+            timestamp = timestamp,
+            scopeType = scopeType
         )
     }
 
     suspend fun clearAllScanResults() = withContext(Dispatchers.IO) {
         scanResultCacheDao.clearAllScanResults()
+    }
+
+    suspend fun clearScopedScanResults() = withContext(Dispatchers.IO) {
+        scanResultCacheDao.clearScanResultsByScope(ScanScopeType.SCOPED)
     }
 
     /**

@@ -44,7 +44,7 @@ object DatabaseModule {
             context,
             CleanSweepDatabase::class.java,
             CleanSweepDatabase.DATABASE_NAME
-        ).build()
+        ).addMigrations(CleanSweepDatabase.MIGRATION_1_2).build()
     }
 
     @Provides

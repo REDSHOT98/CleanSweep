@@ -18,6 +18,7 @@
 package com.cleansweep.service
 
 import com.cleansweep.domain.model.ScanResultGroup
+import com.cleansweep.domain.repository.ScanScopeType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -39,7 +40,10 @@ data class DuplicateScanState(
     val shouldShowResultsDuringScan: Boolean = false,
     val results: List<ScanResultGroup> = emptyList(),
     val unscannableFiles: List<String> = emptyList(),
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    // Metadata for the completed scan
+    val timestamp: Long? = null,
+    val scanScopeType: ScanScopeType? = null
 )
 
 @Singleton
@@ -65,13 +69,20 @@ class DuplicateScanStateHolder @Inject constructor() {
         }
     }
 
-    fun setComplete(results: List<ScanResultGroup>, unscannableFiles: List<String>) {
+    fun setComplete(
+        results: List<ScanResultGroup>,
+        unscannableFiles: List<String>,
+        timestamp: Long,
+        scanScopeType: ScanScopeType
+    ) {
         _state.value = DuplicateScanState(
             scanState = BackgroundScanState.Complete,
             progress = 1f,
             progressPhase = "Complete",
             results = results,
-            unscannableFiles = unscannableFiles
+            unscannableFiles = unscannableFiles,
+            timestamp = timestamp,
+            scanScopeType = scanScopeType
         )
     }
 

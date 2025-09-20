@@ -22,6 +22,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.cleansweep.domain.model.DuplicateGroup
 import com.cleansweep.domain.model.SimilarGroup
+import com.cleansweep.domain.repository.ScanScopeType
 
 @Entity(tableName = "scan_result_groups")
 data class ScanResultGroupCacheEntry(
@@ -30,37 +31,42 @@ data class ScanResultGroupCacheEntry(
     @ColumnInfo(name = "unscannable_file_paths") val unscannableFilePaths: List<String> = emptyList(), // Store only for the summary entry
     val pHash: String?, // For SimilarGroup
     val signature: String?, // For DuplicateGroup
-    val timestamp: Long // When this result was saved
+    val timestamp: Long, // When this result was saved
+    @ColumnInfo(defaultValue = "FULL")
+    val scopeType: String // "FULL" or "SCOPED"
 )
 
 // Helper functions to convert between domain models and cache entities
-fun DuplicateGroup.toCacheEntry(timestamp: Long): ScanResultGroupCacheEntry {
+fun DuplicateGroup.toCacheEntry(timestamp: Long, scopeType: ScanScopeType): ScanResultGroupCacheEntry {
     return ScanResultGroupCacheEntry(
         uniqueId = this.uniqueId,
         groupType = "EXACT",
         pHash = null,
         signature = this.signature,
-        timestamp = timestamp
+        timestamp = timestamp,
+        scopeType = scopeType.name
     )
 }
 
-fun SimilarGroup.toCacheEntry(timestamp: Long): ScanResultGroupCacheEntry {
+fun SimilarGroup.toCacheEntry(timestamp: Long, scopeType: ScanScopeType): ScanResultGroupCacheEntry {
     return ScanResultGroupCacheEntry(
         uniqueId = this.uniqueId,
         groupType = "SIMILAR",
         pHash = this.pHash,
         signature = null,
-        timestamp = timestamp
+        timestamp = timestamp,
+        scopeType = scopeType.name
     )
 }
 
-fun List<String>.toUnscannableFilesCacheEntry(timestamp: Long): ScanResultGroupCacheEntry {
+fun List<String>.toUnscannableFilesCacheEntry(timestamp: Long, scopeType: ScanScopeType): ScanResultGroupCacheEntry {
     return ScanResultGroupCacheEntry(
         uniqueId = "UNSCANNABLE_SUMMARY", // A special unique ID for the summary entry
         groupType = "SUMMARY_UNSCANNABLE",
         unscannableFilePaths = this,
         pHash = null,
         signature = null,
-        timestamp = timestamp
+        timestamp = timestamp,
+        scopeType = scopeType.name
     )
 }

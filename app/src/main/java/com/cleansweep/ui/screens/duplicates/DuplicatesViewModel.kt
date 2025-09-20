@@ -38,6 +38,7 @@ import com.cleansweep.domain.model.SimilarGroup
 import com.cleansweep.domain.repository.DuplicatesRepository
 import com.cleansweep.domain.repository.MediaRepository
 import com.cleansweep.domain.repository.PersistedScanResult
+import com.cleansweep.domain.repository.ScanScopeType
 import com.cleansweep.domain.util.HiddenFileFilter
 import com.cleansweep.service.BackgroundScanState
 import com.cleansweep.service.DuplicateScanService
@@ -59,6 +60,7 @@ import javax.inject.Inject
 
 data class StaleResultsInfo(
     val timestamp: Long,
+    val scopeType: ScanScopeType,
     val isDismissed: Boolean = false
 )
 
@@ -208,21 +210,34 @@ class DuplicatesViewModel @Inject constructor(
                     }
                     BackgroundScanState.Complete -> {
                         val hadSelections = _uiState.value.selectedForDeletion.isNotEmpty()
-                        _uiState.update {
-                            it.copy(
-                                scanState = ScanState.Complete,
-                                resultGroups = backgroundState.results,
-                                unscannableFiles = backgroundState.unscannableFiles,
-                                showUnscannableSummaryCard = backgroundState.unscannableFiles.isNotEmpty(),
-                                scanProgress = 1f,
-                                scanProgressPhase = backgroundState.progressPhase,
-                                staleResultsInfo = null,
-                                selectedForDeletion = emptySet(),
-                                spaceToReclaim = 0L,
-                                toastMessage = if (hadSelections) "Scan complete. Selections have been cleared." else null
-                            )
+
+                        // Both timestamp and scopeType must be present for the state to be valid.
+                        if (backgroundState.timestamp != null && backgroundState.scanScopeType != null) {
+                            _uiState.update {
+                                it.copy(
+                                    scanState = ScanState.Complete,
+                                    resultGroups = backgroundState.results,
+                                    unscannableFiles = backgroundState.unscannableFiles,
+                                    showUnscannableSummaryCard = backgroundState.unscannableFiles.isNotEmpty(),
+                                    scanProgress = 1f,
+                                    scanProgressPhase = backgroundState.progressPhase,
+                                    staleResultsInfo = StaleResultsInfo(
+                                        timestamp = backgroundState.timestamp,
+                                        scopeType = backgroundState.scanScopeType
+                                    ),
+                                    selectedForDeletion = emptySet(),
+                                    spaceToReclaim = 0L,
+                                    toastMessage = if (hadSelections) "Scan complete. Selections have been cleared." else null
+                                )
+                            }
+                            // After a fresh *full* scan, clear any lingering scoped cache to avoid confusion.
+                            if (backgroundState.scanScopeType == ScanScopeType.FULL) {
+                                duplicatesRepository.clearScopedScanResults()
+                            }
+                            coilPreloader.preload(backgroundState.results.flatMap { it.items })
+                        } else {
+                            Log.e("DuplicatesViewModel", "Scan complete but metadata is missing. Cannot update UI.")
                         }
-                        coilPreloader.preload(backgroundState.results.flatMap { it.items })
                     }
                     BackgroundScanState.Cancelled -> {
                         _uiState.update { it.copy(toastMessage = "Scan cancelled") }
@@ -257,7 +272,10 @@ class DuplicatesViewModel @Inject constructor(
                         showUnscannableSummaryCard = results.unscannableFiles.isNotEmpty(),
                         scanProgress = if (isFallback) 0f else 1f,
                         scanProgressPhase = if (isFallback) null else "Complete",
-                        staleResultsInfo = StaleResultsInfo(timestamp = results.timestamp)
+                        staleResultsInfo = StaleResultsInfo(
+                            timestamp = results.timestamp,
+                            scopeType = results.scopeType
+                        )
                     )
                 }
                 coilPreloader.preload(results.groups.flatMap { it.items })
@@ -285,7 +303,10 @@ class DuplicatesViewModel @Inject constructor(
                         resultGroups = results.groups,
                         unscannableFiles = results.unscannableFiles,
                         showUnscannableSummaryCard = results.unscannableFiles.isNotEmpty(),
-                        staleResultsInfo = StaleResultsInfo(timestamp = results.timestamp)
+                        staleResultsInfo = StaleResultsInfo(
+                            timestamp = results.timestamp,
+                            scopeType = results.scopeType
+                        )
                     )
                 }
             }
@@ -504,6 +525,14 @@ class DuplicatesViewModel @Inject constructor(
                     folderUpdateEventBus.post(FolderUpdateEvent.FolderBatchUpdate(folderDeltas))
                 }
 
+                val currentStaleInfo = _uiState.value.staleResultsInfo
+                if (currentStaleInfo == null) {
+                    Log.e("DuplicatesViewModel", "Cannot update cache: stale info is missing.")
+                    // Fallback or error handling
+                    _uiState.update { it.copy(isDeleting = false, toastMessage = "Error updating results cache.") }
+                    return@launch
+                }
+
                 val remainingGroups = _uiState.value.resultGroups.mapNotNull { group ->
                     val remainingItems = group.items.filterNot { it.id in idsDeletedSuccessfully }
                     if (remainingItems.size > 1) {
@@ -516,9 +545,13 @@ class DuplicatesViewModel @Inject constructor(
                     }
                 }
 
-                // Preserve original timestamp when saving modified cached results
-                val originalTimestamp = _uiState.value.staleResultsInfo?.timestamp
-                duplicatesRepository.saveScanResults(remainingGroups, _uiState.value.unscannableFiles, originalTimestamp)
+                // Preserve original timestamp and scope when saving modified cached results
+                duplicatesRepository.saveScanResults(
+                    groups = remainingGroups,
+                    unscannableFiles = _uiState.value.unscannableFiles,
+                    scopeType = currentStaleInfo.scopeType,
+                    timestamp = currentStaleInfo.timestamp
+                )
 
                 _uiState.update {
                     it.copy(
