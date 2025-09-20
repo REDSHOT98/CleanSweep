@@ -1,6 +1,6 @@
 # CleanSweep
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://gitlab.com/LoopOtto/cleansweep/-/blob/main/LICENSE)
-[![GitLab Issues](https://img.shields.io/gitlab/issues/all/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/issues)
+[![GitLab Issues](https://img.shields.io/gitlab/issues/open/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/issues)
 [![GitLab Release](https://img.shields.io/gitlab/v/release/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/releases)
 
 **Tired of a cluttered photo gallery? Get organized with a swipe!**
