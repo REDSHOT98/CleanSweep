@@ -187,7 +187,7 @@ fun PermissionRequiredScreen() {
             onDismissRequest = { showCloseDialog = false },
             title = { Text("Close CleanSweep") },
             text = {
-                Text("CleanSweep cannot function without All Files Access permission. We tried to, but it ended up being required for CleanSweep to work properly for 99.9% of users.")
+                Text("CleanSweep cannot function without All Files Access permission. We tried to, but it ended up being required for CleanSweep to work properly for most users.")
             },
             confirmButton = {
                 Button(

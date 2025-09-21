@@ -872,31 +872,26 @@ class SwiperViewModel @Inject constructor(
         folderDialogCollectionJob?.cancel()
         val currentTargetPaths = _uiState.value.targetFolders.map { it.first }.toSet()
 
+        // Background collection for live updates
         folderDialogCollectionJob = viewModelScope.launch {
             mediaRepository.observeFoldersForTargetDialog().collect { allFolders ->
-                _uiState.update { it.copy(allFolderPathsForDialog = allFolders) }
+                val availableFolders = allFolders.filterNot { it.first in currentTargetPaths }
+                _uiState.update { it.copy(allFolderPathsForDialog = availableFolders) }
 
-                // Only prepare the search manager if the dialog is already open,
-                // to avoid overwriting the initial cached list.
+                // Use the safe update function to prevent resetting user state
                 if (_uiState.value.showAddTargetFolderDialog) {
-                    val initialPath = _uiState.value.defaultCreationPath
-                    folderSearchManager.prepareWithPreFilteredList(
-                        folders = allFolders,
-                        initialPath = initialPath,
-                        excludedFolders = currentTargetPaths
-                    )
+                    folderSearchManager.updateSourceFolders(availableFolders)
                 }
             }
         }
 
-        // This part runs immediately, without waiting for the flow collection to start.
+        // Fast path initialization with cached data
         viewModelScope.launch {
-            val cachedFolders = mediaRepository.getCachedFolderSnapshot()
+            val cachedFolders = mediaRepository.getCachedFolderSnapshot().filterNot { it.first in currentTargetPaths }
             val initialPath = _uiState.value.defaultCreationPath
             folderSearchManager.prepareWithPreFilteredList(
                 folders = cachedFolders,
-                initialPath = initialPath,
-                excludedFolders = currentTargetPaths
+                initialPath = initialPath
             )
             _uiState.update { it.copy(showAddTargetFolderDialog = true) }
         }
@@ -1203,12 +1198,15 @@ class SwiperViewModel @Inject constructor(
         val restoredItemIndex = currentState.allMediaItems.indexOfFirst { it.id == originalItemToRestoreId }
         val currentSwiperIndex = currentState.currentIndex
 
+        val shouldKeepSheetOpen = updatedPendingChanges.isNotEmpty()
+
         // Case 1: The reverted item is the one currently being displayed.
         if (currentState.currentItem?.id == originalItemToRestoreId) {
             val isScreenshotRevert = changeToRevert.action is SwiperAction.Screenshot
             _uiState.update {
                 it.copy(
                     pendingChanges = updatedPendingChanges,
+                    showSummarySheet = shouldKeepSheetOpen,
                     // Only reset the conversion flag if it was a screenshot revert
                     isCurrentItemPendingConversion = if (isScreenshotRevert) false else it.isCurrentItemPendingConversion
                 )
@@ -1219,7 +1217,7 @@ class SwiperViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     pendingChanges = updatedPendingChanges,
-                    showSummarySheet = false,
+                    showSummarySheet = shouldKeepSheetOpen,
                     currentItem = it.allMediaItems[restoredItemIndex],
                     currentIndex = restoredItemIndex,
                     isSortingComplete = false,
@@ -1232,8 +1230,12 @@ class SwiperViewModel @Inject constructor(
         }
         // Case 3: The item can't be restored to the view (e.g., it's ahead in the queue), so just update the list.
         else {
-            val shouldDismissSheet = updatedPendingChanges.isEmpty()
-            _uiState.update { it.copy(pendingChanges = updatedPendingChanges, showSummarySheet = !shouldDismissSheet) }
+            _uiState.update {
+                it.copy(
+                    pendingChanges = updatedPendingChanges,
+                    showSummarySheet = shouldKeepSheetOpen
+                )
+            }
         }
     }
 

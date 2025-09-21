@@ -125,17 +125,7 @@ class FolderSearchManager @Inject constructor(
             // (e.g., a new folder is created) will still be caught here.
             mediaRepository.observeAllFolders().collect { folders ->
                 val availableFolders = folders.filterNot { it.first in excludedFolders }
-                allFoldersFromRepo = availableFolders
-                _state.update { currentState ->
-                    currentState.copy(
-                        displayedResults = calculateResults(
-                            sourceList = availableFolders,
-                            query = currentState.searchQuery,
-                            browsePath = currentState.browsePath,
-                            isPreFiltered = false
-                        )
-                    )
-                }
+                updateSourceFolders(availableFolders)
             }
         }
     }
@@ -164,6 +154,32 @@ class FolderSearchManager @Inject constructor(
             displayedResults = initialResults
         )
     }
+
+    /**
+     * Safely updates the source list of folders without resetting the user's current
+     * search or browse state. This is used to feed new data from background flows
+     * without causing UI flickers or state resets.
+     */
+    fun updateSourceFolders(newFolders: List<Pair<String, String>>) {
+        val currentState = _state.value
+        if (currentState.isPreFilteredMode) {
+            this.preFilteredList = newFolders
+        } else {
+            this.allFoldersFromRepo = newFolders
+        }
+
+        _state.update {
+            it.copy(
+                displayedResults = calculateResults(
+                    sourceList = newFolders,
+                    query = it.searchQuery,
+                    browsePath = it.browsePath,
+                    isPreFiltered = it.isPreFilteredMode
+                )
+            )
+        }
+    }
+
 
     fun updateSearchQuery(query: String) {
         val currentState = _state.value

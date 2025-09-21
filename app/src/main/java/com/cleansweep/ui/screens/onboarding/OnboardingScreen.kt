@@ -61,32 +61,32 @@ fun OnboardingScreen(
     val pages = listOf(
         OnboardingPage(
             title = "Welcome to CleanSweep",
-            description = "The fastest way to organize your photos and videos. Clean up your gallery in minutes, not hours.",
+            description = "Take control of your gallery. A simple, powerful way to sort thousands of photos and videos.\nReclaim your time and your storage space.",
             icon = Icons.Default.PhotoLibrary
         ),
         OnboardingPage(
-            title = "Swipe to Sort",
-            description = "Swipe right to keep your media in the current folder. It's that simple!",
-            icon = Icons.Default.ThumbUp
+            title = "Simple Swiping",
+            description = "Swipe right to keep, swipe left to delete. Made a mistake? The Undo button has your back! Not sure yet? Use the Skip button to decide later.",
+            icon = Icons.Default.SwapHoriz
         ),
         OnboardingPage(
-            title = "Quick Deletion",
-            description = "Swipe left to move unwanted photos and videos to trash. Don't worry - they're safely stored until you're ready to delete them.",
-            icon = Icons.Default.Delete
-        ),
-        OnboardingPage(
-            title = "Smart Organization",
-            description = "Tap folder icons below the media to quickly move photos and videos to different albums. Organize by events, people, or categories instantly.",
+            title = "Powerful Sorting",
+            description = "Tap folders to instantly move files. Long-press an item to quickly send it to a 'To Edit' folder or access other shortcuts.",
             icon = Icons.Default.FolderOpen
         ),
         OnboardingPage(
-            title = "Duplicate Management",
-            description = "Automatically detect and manage duplicate photos and videos. Free up storage space by removing identical and similar files.",
-            icon = Icons.Default.ContentCopy
+            title = "Find Similar Photos",
+            description = "Our duplicate finder goes beyond exact copies to also find visually similar photos and videos. You can even adjust the sensitivity in the settings!",
+            icon = Icons.Default.ControlPointDuplicate
         ),
         OnboardingPage(
-            title = "Lightning Fast",
-            description = "Our gesture-based interface lets you process hundreds of files in minutes. No more endless scrolling through galleries!",
+            title = "Video Superpowers",
+            description = "Fly through videos with playback speed controls. You can even capture a perfect moment by saving a single frame as a new photo.",
+            icon = Icons.Default.VideoLibrary
+        ),
+        OnboardingPage(
+            title = "You're in Control",
+            description = "You've learned the basics. Now you're ready to organize your media faster than ever before.",
             icon = Icons.Default.Speed
         )
     )
@@ -350,7 +350,7 @@ fun OnboardingScreen(
             title = { Text("Close CleanSweep", style = MaterialTheme.typography.headlineSmall) },
             text = {
                 Text(
-                    "CleanSweep cannot function without All Files Access permission. We tried to but it ended up being required for CleanSweep to work properly for 99.9% of users.",
+                    "CleanSweep cannot function without All Files Access permission. We tried to but it ended up being required for CleanSweep to work properly for most users.",
                     style = MaterialTheme.typography.bodyMedium
                 )
             },
