@@ -79,6 +79,7 @@ import com.cleansweep.data.repository.FolderBarLayout
 import com.cleansweep.data.repository.FolderNameLayout
 import com.cleansweep.data.repository.FolderSelectionMode
 import com.cleansweep.data.repository.SimilarityThresholdLevel
+import com.cleansweep.data.repository.SwipeDownAction
 import com.cleansweep.data.repository.SwipeSensitivity
 import com.cleansweep.ui.components.AppDialog
 import com.cleansweep.ui.components.FolderSearchDialog
@@ -172,6 +173,7 @@ fun SettingsScreen(
     val useLegacyFolderIcons by viewModel.useLegacyFolderIcons.collectAsState()
     val addFolderFocusTarget by viewModel.addFolderFocusTarget.collectAsState()
     val swipeSensitivity by viewModel.swipeSensitivity.collectAsState()
+    val swipeDownAction by viewModel.swipeDownAction.collectAsState()
     val addFavoriteToTargetByDefault by viewModel.addFavoriteToTargetByDefault.collectAsState()
     val hintOnExistingFolderName by viewModel.hintOnExistingFolderName.collectAsState()
     val pathOptions = viewModel.standardAlbumDirectories
@@ -395,6 +397,16 @@ fun SettingsScreen(
                                 selectedOption = swipeSensitivity,
                                 onOptionSelected = { viewModel.setSwipeSensitivity(it) },
                                 getDisplayName = { getSwipeSensitivityDisplayName(it) })
+                        },
+                        SettingContent(keywords = listOf("swipe down action", "gesture", "shortcut", "edit", "skip", "add folder", "share", "open")) {
+                            ExposedDropdownMenu(
+                                title = "Swipe Down Action",
+                                description = "Assign a shortcut to the swipe down gesture on a media card.",
+                                options = SwipeDownAction.entries,
+                                selectedOption = swipeDownAction,
+                                onOptionSelected = { viewModel.setSwipeDownAction(it) },
+                                getDisplayName = { getSwipeDownActionDisplayName(it) }
+                            )
                         },
                         SettingContent(keywords = listOf("default video speed", "playback")) {
                             val videoSpeedOptions = listOf(1.0f, 1.5f, 2.0f)
@@ -1409,6 +1421,17 @@ private fun getSwipeSensitivityDisplayName(sensitivity: SwipeSensitivity): Strin
         SwipeSensitivity.LOW -> "Low"
         SwipeSensitivity.MEDIUM -> "Medium"
         SwipeSensitivity.HIGH -> "High"
+    }
+}
+
+private fun getSwipeDownActionDisplayName(action: SwipeDownAction): String {
+    return when (action) {
+        SwipeDownAction.NONE -> "None"
+        SwipeDownAction.MOVE_TO_EDIT -> "Move to 'To Edit'"
+        SwipeDownAction.SKIP_ITEM -> "Skip Item"
+        SwipeDownAction.ADD_TARGET_FOLDER -> "Add Target Folder"
+        SwipeDownAction.SHARE -> "Share"
+        SwipeDownAction.OPEN_WITH -> "Open With..."
     }
 }
 

@@ -18,8 +18,11 @@
 package com.cleansweep.ui.screens.swiper
 
 import android.content.Context
+import android.content.Intent
 import android.os.Parcelable
 import android.util.Log
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.compose.ui.unit.DpOffset
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -32,6 +35,7 @@ import com.cleansweep.data.repository.FolderBarLayout
 import com.cleansweep.data.repository.FolderNameLayout
 import com.cleansweep.data.repository.PreferencesRepository
 import com.cleansweep.data.repository.SummaryViewMode
+import com.cleansweep.data.repository.SwipeDownAction
 import com.cleansweep.data.repository.SwipeSensitivity
 import com.cleansweep.di.AppModule
 import com.cleansweep.domain.bus.AppLifecycleEventBus
@@ -168,6 +172,9 @@ class SwiperViewModel @Inject constructor(
 
     val swipeSensitivity: StateFlow<SwipeSensitivity> = preferencesRepository.swipeSensitivityFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SwipeSensitivity.MEDIUM)
+
+    val swipeDownAction: StateFlow<SwipeDownAction> = preferencesRepository.swipeDownActionFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SwipeDownAction.NONE)
 
     val rememberProcessedMedia: StateFlow<Boolean> = preferencesRepository.rememberProcessedMediaFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -585,6 +592,20 @@ class SwiperViewModel @Inject constructor(
         val currentItem = _uiState.value.currentItem ?: return
         addPendingChange(PendingChange(currentItem, if (_invertSwipe) SwiperAction.Delete(currentItem) else SwiperAction.Keep(currentItem)))
         advanceState()
+    }
+
+    fun handleSwipeDown() {
+        val currentItem = _uiState.value.currentItem ?: return
+        viewModelScope.launch {
+            when(swipeDownAction.first()) {
+                SwipeDownAction.NONE -> { /* Do nothing */ }
+                SwipeDownAction.MOVE_TO_EDIT -> moveToEditFolder()
+                SwipeDownAction.SKIP_ITEM -> handleSkip()
+                SwipeDownAction.ADD_TARGET_FOLDER -> showAddTargetFolderDialog()
+                SwipeDownAction.SHARE -> shareCurrentItem()
+                SwipeDownAction.OPEN_WITH -> openCurrentItem()
+            }
+        }
     }
 
     fun handleSkip() {
@@ -1097,6 +1118,64 @@ class SwiperViewModel @Inject constructor(
 
     fun dismissMediaItemMenu() {
         _uiState.update { it.copy(showMediaItemMenu = false) }
+    }
+
+    fun shareCurrentItem() {
+        val currentItem = _uiState.value.currentItem ?: return
+        dismissMediaItemMenu()
+
+        val shareUri = if (currentItem.uri.scheme == "file") {
+            try {
+                val file = File(currentItem.id)
+                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error creating content URI for sharing", e)
+                Toast.makeText(context, "Error preparing file for sharing.", Toast.LENGTH_LONG).show()
+                return
+            }
+        } else {
+            currentItem.uri
+        }
+
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = context.contentResolver.getType(shareUri) ?: "*/*"
+            putExtra(Intent.EXTRA_STREAM, shareUri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            val chooser = Intent.createChooser(shareIntent, "Share Media").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: Exception) {
+            Toast.makeText(context, "No app to share this file to.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    fun openCurrentItem() {
+        val currentItem = _uiState.value.currentItem ?: return
+        dismissMediaItemMenu()
+        val viewUri = if (currentItem.uri.scheme == "file") {
+            try {
+                val file = File(currentItem.id)
+                FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            } catch (e: Exception) {
+                currentItem.uri // fallback
+            }
+        } else {
+            currentItem.uri
+        }
+
+        val openIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(viewUri, context.contentResolver.getType(viewUri))
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(openIntent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "No app can open this file.", Toast.LENGTH_LONG).show()
+        }
     }
 
     fun toggleTargetFavorite(folderPath: String) {

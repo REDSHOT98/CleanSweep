@@ -32,6 +32,7 @@ import com.cleansweep.data.repository.FolderNameLayout
 import com.cleansweep.data.repository.FolderSelectionMode
 import com.cleansweep.data.repository.PreferencesRepository
 import com.cleansweep.data.repository.SimilarityThresholdLevel
+import com.cleansweep.data.repository.SwipeDownAction
 import com.cleansweep.data.repository.SwipeSensitivity
 import com.cleansweep.domain.bus.AppLifecycleEventBus
 import com.cleansweep.domain.bus.FolderUpdateEvent
@@ -251,6 +252,14 @@ class SettingsViewModel @Inject constructor(
                 scope = viewModelScope,
                 started = SharingStarted.WhileSubscribed(5000),
                 initialValue = SwipeSensitivity.MEDIUM
+            )
+
+    val swipeDownAction: StateFlow<SwipeDownAction> =
+        preferencesRepository.swipeDownActionFlow
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = SwipeDownAction.NONE
             )
 
     val addFavoriteToTargetByDefault: StateFlow<Boolean> =
@@ -605,6 +614,12 @@ class SettingsViewModel @Inject constructor(
     fun setSwipeSensitivity(sensitivity: SwipeSensitivity) {
         viewModelScope.launch {
             preferencesRepository.setSwipeSensitivity(sensitivity)
+        }
+    }
+
+    fun setSwipeDownAction(action: SwipeDownAction) {
+        viewModelScope.launch {
+            preferencesRepository.setSwipeDownAction(action)
         }
     }
 

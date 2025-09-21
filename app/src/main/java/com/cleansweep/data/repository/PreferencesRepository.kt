@@ -85,6 +85,15 @@ enum class DuplicateScanScope {
     EXCLUDE_LIST
 }
 
+enum class SwipeDownAction {
+    NONE,
+    MOVE_TO_EDIT,
+    SKIP_ITEM,
+    ADD_TARGET_FOLDER,
+    SHARE,
+    OPEN_WITH
+}
+
 
 @Singleton
 class PreferencesRepository @Inject constructor(
@@ -133,6 +142,7 @@ class PreferencesRepository @Inject constructor(
         val DUPLICATE_SCAN_SCOPE = stringPreferencesKey("duplicate_scan_scope")
         val DUPLICATE_SCAN_INCLUDE_LIST = stringPreferencesKey("duplicate_scan_include_list")
         val DUPLICATE_SCAN_EXCLUDE_LIST = stringPreferencesKey("duplicate_scan_exclude_list")
+        val SWIPE_DOWN_ACTION = stringPreferencesKey("swipe_down_action")
 
         val DEFAULT_VIDEO_SPEED = floatPreferencesKey("default_video_speed")
 
@@ -349,6 +359,16 @@ class PreferencesRepository @Inject constructor(
                 SwipeSensitivity.valueOf(sensitivityName)
             } catch (e: IllegalArgumentException) {
                 SwipeSensitivity.MEDIUM
+            }
+        }
+
+    val swipeDownActionFlow: Flow<SwipeDownAction> = context.dataStore.data
+        .map { preferences ->
+            val actionName = preferences[PreferencesKeys.SWIPE_DOWN_ACTION] ?: SwipeDownAction.NONE.name
+            try {
+                SwipeDownAction.valueOf(actionName)
+            } catch (e: IllegalArgumentException) {
+                SwipeDownAction.NONE
             }
         }
 
@@ -680,6 +700,12 @@ class PreferencesRepository @Inject constructor(
     suspend fun setSwipeSensitivity(sensitivity: SwipeSensitivity) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.SWIPE_SENSITIVITY] = sensitivity.name
+        }
+    }
+
+    suspend fun setSwipeDownAction(action: SwipeDownAction) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SWIPE_DOWN_ACTION] = action.name
         }
     }
 

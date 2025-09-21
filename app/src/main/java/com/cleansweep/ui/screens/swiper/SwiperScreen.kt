@@ -31,6 +31,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateOffsetAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -82,6 +83,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -97,6 +99,7 @@ import coil.request.ImageRequest
 import com.cleansweep.data.model.MediaItem
 import com.cleansweep.data.repository.FolderBarLayout
 import com.cleansweep.data.repository.FolderNameLayout
+import com.cleansweep.data.repository.SwipeDownAction
 import com.cleansweep.data.repository.SwipeSensitivity
 import com.cleansweep.ui.components.AppDropdownMenu
 import com.cleansweep.ui.components.AppMenuDivider
@@ -134,6 +137,7 @@ fun SwiperScreen(
     val uiState by viewModel.uiState.collectAsState()
     val invertSwipe by viewModel.invertSwipe.collectAsState()
     val swipeSensitivity by viewModel.swipeSensitivity.collectAsState()
+    val swipeDownAction by viewModel.swipeDownAction.collectAsState()
     val folderBarLayout by viewModel.folderBarLayout.collectAsState()
     val folderNameLayout by viewModel.folderNameLayout.collectAsState()
     val skipPartialExpansion by viewModel.skipPartialExpansion.collectAsState()
@@ -313,18 +317,22 @@ fun SwiperScreen(
                     if (isExpandedScreen) {
                         Row(modifier = Modifier.fillMaxSize()) {
                             MainContent(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .zIndex(1f),
                                 currentItem = uiState.currentItem!!,
                                 exoPlayer = exoPlayer,
                                 imageLoader = viewModel.imageLoader,
                                 gifImageLoader = viewModel.gifImageLoader,
                                 onSwipeLeft = viewModel::handleSwipeLeft,
                                 onSwipeRight = viewModel::handleSwipeRight,
+                                onSwipeDown = viewModel::handleSwipeDown,
                                 onLongPress = viewModel::showMediaItemMenu,
                                 onMoveToEdit = viewModel::moveToEditFolder,
                                 hideFilename = uiState.hideFilename,
                                 invertSwipe = invertSwipe,
                                 sensitivity = swipeSensitivity,
+                                swipeDownAction = swipeDownAction,
                                 videoPlaybackSpeed = uiState.videoPlaybackSpeed,
                                 onSetVideoPlaybackSpeed = viewModel::setPlaybackSpeed,
                                 isVideoMuted = uiState.isVideoMuted,
@@ -370,18 +378,22 @@ fun SwiperScreen(
                     } else {
                         Column(modifier = Modifier.fillMaxSize()) {
                             MainContent(
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .zIndex(1f),
                                 currentItem = uiState.currentItem!!,
                                 exoPlayer = exoPlayer,
                                 imageLoader = viewModel.imageLoader,
                                 gifImageLoader = viewModel.gifImageLoader,
                                 onSwipeLeft = viewModel::handleSwipeLeft,
                                 onSwipeRight = viewModel::handleSwipeRight,
+                                onSwipeDown = viewModel::handleSwipeDown,
                                 onLongPress = viewModel::showMediaItemMenu,
                                 onMoveToEdit = viewModel::moveToEditFolder,
                                 hideFilename = uiState.hideFilename,
                                 invertSwipe = invertSwipe,
                                 sensitivity = swipeSensitivity,
+                                swipeDownAction = swipeDownAction,
                                 videoPlaybackSpeed = uiState.videoPlaybackSpeed,
                                 onSetVideoPlaybackSpeed = viewModel::setPlaybackSpeed,
                                 isVideoMuted = uiState.isVideoMuted,
@@ -509,7 +521,9 @@ fun SwiperScreen(
                 exoPlayer = exoPlayer,
                 onDismiss = viewModel::dismissMediaItemMenu,
                 onScreenshot = viewModel::addScreenshotChange,
-                onMoveToEdit = viewModel::moveToEditFolder
+                onMoveToEdit = viewModel::moveToEditFolder,
+                onShare = viewModel::shareCurrentItem,
+                onOpen = viewModel::openCurrentItem
             )
         }
         if (uiState.showSummarySheet) {
@@ -585,11 +599,13 @@ private fun MainContent(
     gifImageLoader: ImageLoader,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
+    onSwipeDown: () -> Unit,
     onLongPress: (offset: DpOffset) -> Unit,
     onMoveToEdit: () -> Unit,
     hideFilename: Boolean,
     invertSwipe: Boolean,
     sensitivity: SwipeSensitivity,
+    swipeDownAction: SwipeDownAction,
     videoPlaybackSpeed: Float,
     onSetVideoPlaybackSpeed: (Float) -> Unit,
     isVideoMuted: Boolean,
@@ -603,26 +619,32 @@ private fun MainContent(
         if (folderNameLayout == FolderNameLayout.ABOVE) {
             FolderNameHeader(currentItem.bucketName)
         }
-        MediaItemCard(
-            item = currentItem,
-            exoPlayer = exoPlayer,
-            imageLoader = imageLoader,
-            gifImageLoader = gifImageLoader,
-            onSwipeLeft = onSwipeLeft,
-            onSwipeRight = onSwipeRight,
-            onLongPress = onLongPress,
-            modifier = Modifier.weight(1f),
-            hideFilename = hideFilename,
-            invertSwipe = invertSwipe,
-            sensitivity = sensitivity,
-            videoPlaybackSpeed = videoPlaybackSpeed,
-            onSetVideoPlaybackSpeed = onSetVideoPlaybackSpeed,
-            isVideoMuted = isVideoMuted,
-            onToggleMute = onToggleMute,
-            onTap = onTap,
-            isPendingConversion = isPendingConversion,
-            screenshotDeletesVideo = screenshotDeletesVideo
-        )
+        // Keying the MediaItemCard forces a full recomposition when the item ID changes,
+        // preventing stale UI issues (e.g., image not updating after skip during swiping).
+        key(currentItem.id) {
+            MediaItemCard(
+                item = currentItem,
+                exoPlayer = exoPlayer,
+                imageLoader = imageLoader,
+                gifImageLoader = gifImageLoader,
+                onSwipeLeft = onSwipeLeft,
+                onSwipeRight = onSwipeRight,
+                onSwipeDown = onSwipeDown,
+                onLongPress = onLongPress,
+                modifier = Modifier.weight(1f),
+                hideFilename = hideFilename,
+                invertSwipe = invertSwipe,
+                sensitivity = sensitivity,
+                swipeDownAction = swipeDownAction,
+                videoPlaybackSpeed = videoPlaybackSpeed,
+                onSetVideoPlaybackSpeed = onSetVideoPlaybackSpeed,
+                isVideoMuted = isVideoMuted,
+                onToggleMute = onToggleMute,
+                onTap = onTap,
+                isPendingConversion = isPendingConversion,
+                screenshotDeletesVideo = screenshotDeletesVideo
+            )
+        }
     }
 }
 
@@ -704,7 +726,9 @@ private fun MediaItemContextMenu(
     exoPlayer: ExoPlayer,
     onDismiss: () -> Unit,
     onScreenshot: (Long) -> Unit,
-    onMoveToEdit: () -> Unit
+    onMoveToEdit: () -> Unit,
+    onShare: () -> Unit,
+    onOpen: () -> Unit
 ) {
     val appContext = LocalContext.current
     if (isVisible && currentItem != null) {
@@ -759,41 +783,12 @@ private fun MediaItemContextMenu(
             }
             DropdownMenuItem(
                 text = { Text("Share") },
-                onClick = {
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = appContext.contentResolver.getType(currentItem.uri) ?: "*/*"
-                        putExtra(Intent.EXTRA_STREAM, currentItem.uri)
-                    }
-                    appContext.startActivity(Intent.createChooser(shareIntent, "Share Media"))
-                    onDismiss()
-                },
+                onClick = onShare,
                 leadingIcon = { Icon(Icons.Default.Share, null) }
             )
             DropdownMenuItem(
                 text = { Text("Open with") },
-                onClick = {
-                    val viewUri = if (currentItem.uri.scheme == "file") {
-                        try {
-                            val file = File(currentItem.id)
-                            FileProvider.getUriForFile(appContext, "${appContext.packageName}.provider", file)
-                        } catch (e: Exception) {
-                            currentItem.uri // fallback
-                        }
-                    } else {
-                        currentItem.uri
-                    }
-
-                    val openIntent = Intent(Intent.ACTION_VIEW).apply {
-                        setDataAndType(viewUri, appContext.contentResolver.getType(viewUri))
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    try {
-                        appContext.startActivity(openIntent)
-                    } catch (e: Exception) {
-                        Toast.makeText(appContext, "No app can open this file.", Toast.LENGTH_LONG).show()
-                    }
-                    onDismiss()
-                },
+                onClick = onOpen,
                 leadingIcon = { Icon(Icons.AutoMirrored.Filled.OpenInNew, null) }
             )
         }
@@ -1215,12 +1210,14 @@ private fun MediaItemCard(
     gifImageLoader: ImageLoader,
     onSwipeLeft: () -> Unit,
     onSwipeRight: () -> Unit,
+    onSwipeDown: () -> Unit,
     onLongPress: (offset: DpOffset) -> Unit,
     onTap: (MediaItem) -> Unit,
     modifier: Modifier = Modifier,
     hideFilename: Boolean = false,
     invertSwipe: Boolean = false,
     sensitivity: SwipeSensitivity,
+    swipeDownAction: SwipeDownAction,
     videoPlaybackSpeed: Float,
     onSetVideoPlaybackSpeed: (Float) -> Unit,
     isVideoMuted: Boolean,
@@ -1229,23 +1226,27 @@ private fun MediaItemCard(
     screenshotDeletesVideo: Boolean
 ) {
     var swipeOffsetX by remember { mutableFloatStateOf(0f) }
+    var swipeOffsetY by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     var scale by remember { mutableFloatStateOf(1f) }
     var panOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val horizontalThreshold = when (sensitivity) {
+    val swipeThreshold = when (sensitivity) {
         SwipeSensitivity.LOW -> with(density) { 60.dp.toPx() }
         SwipeSensitivity.MEDIUM -> with(density) { 80.dp.toPx() }
         SwipeSensitivity.HIGH -> with(density) { 140.dp.toPx() }
     }
+    // Make swipe down slightly easier to trigger than horizontal swipes
+    val swipeDownThreshold = swipeThreshold * 0.8f
 
     val rotation = (swipeOffsetX / 30).coerceIn(-6f, 6f)
-    val animatedOffsetX by animateFloatAsState(targetValue = swipeOffsetX, label = "offsetX")
+    val animatedOffsetX by animateFloatAsState(targetValue = swipeOffsetX, label = "offsetX", animationSpec = tween(durationMillis = 150))
+    val animatedOffsetY by animateFloatAsState(targetValue = swipeOffsetY, label = "offsetY", animationSpec = tween(durationMillis = 150))
     val animatedScale by animateFloatAsState(targetValue = scale, label = "scale")
     val animatedPanOffset by animateOffsetAsState(targetValue = panOffset, label = "panOffset")
 
-    val leftBorderAlpha = if (swipeOffsetX < 0) (abs(swipeOffsetX) / horizontalThreshold).coerceIn(0f, 1f) else 0f
-    val rightBorderAlpha = if (swipeOffsetX > 0) (swipeOffsetX / horizontalThreshold).coerceIn(0f, 1f) else 0f
+    val leftBorderAlpha = if (swipeOffsetX < 0) (abs(swipeOffsetX) / swipeThreshold).coerceIn(0f, 1f) else 0f
+    val rightBorderAlpha = if (swipeOffsetX > 0) (swipeOffsetX / swipeThreshold).coerceIn(0f, 1f) else 0f
     val leftColor = if (invertSwipe) Color.Green else Color.Red
     val rightColor = if (invertSwipe) Color.Red else Color.Green
     var globalPosition by remember { mutableStateOf(Offset.Zero) }
@@ -1254,6 +1255,7 @@ private fun MediaItemCard(
         scale = 1f
         panOffset = Offset.Zero
         swipeOffsetX = 0f
+        swipeOffsetY = 0f
     }
 
     BoxWithConstraints(
@@ -1280,7 +1282,7 @@ private fun MediaItemCard(
                 .onGloballyPositioned {
                     globalPosition = it.localToWindow(Offset.Zero)
                 }
-                .pointerInput(item.id) {
+                .pointerInput(item.id, swipeDownAction) {
                     forEachGesture {
                         coroutineScope {
                             awaitPointerEventScope {
@@ -1335,13 +1337,16 @@ private fun MediaItemCard(
 
                                         if (dragAmount.getDistance() > viewConfiguration.touchSlop) {
                                             longPressJob.cancel()
+                                            wasDragging = true
                                             if (abs(dragAmount.x) > abs(dragAmount.y) && scale <= 1f) {
-                                                wasDragging = true
                                                 swipeOffsetX += dragAmount.x
-                                                change.consume()
-                                            } else {
-                                                longPressJob.cancel()
+                                            } else if (abs(dragAmount.y) > abs(dragAmount.x) && scale <= 1f) {
+                                                if (swipeDownAction != SwipeDownAction.NONE) {
+                                                    // Prevent dragging card upwards
+                                                    swipeOffsetY = (swipeOffsetY + dragAmount.y).coerceAtLeast(0f)
+                                                }
                                             }
+                                            change.consume()
                                         }
                                     }
                                 } while (anyPressed)
@@ -1350,9 +1355,16 @@ private fun MediaItemCard(
 
                                 if (wasDragging) {
                                     when {
-                                        swipeOffsetX < -horizontalThreshold -> onSwipeLeft()
-                                        swipeOffsetX > horizontalThreshold -> onSwipeRight()
-                                        else -> swipeOffsetX = 0f
+                                        swipeOffsetX < -swipeThreshold -> onSwipeLeft()
+                                        swipeOffsetX > swipeThreshold -> onSwipeRight()
+                                        swipeOffsetY > swipeDownThreshold -> {
+                                            onSwipeDown()
+                                            swipeOffsetY = 0f
+                                        }
+                                        else -> {
+                                            swipeOffsetX = 0f
+                                            swipeOffsetY = 0f
+                                        }
                                     }
                                 } else if (!wasTransforming && !longPressFired) {
                                     if (scale > 1f) {
@@ -1368,7 +1380,7 @@ private fun MediaItemCard(
                 }
                 .graphicsLayer {
                     translationX = if (animatedScale > 1f) animatedPanOffset.x else animatedOffsetX
-                    translationY = if (animatedScale > 1f) animatedPanOffset.y else 0f
+                    translationY = if (animatedScale > 1f) animatedPanOffset.y else animatedOffsetY
                     scaleX = animatedScale
                     scaleY = animatedScale
                     rotationZ = if (animatedScale > 1f) 0f else rotation
