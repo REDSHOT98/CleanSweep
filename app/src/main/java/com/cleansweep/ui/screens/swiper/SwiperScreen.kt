@@ -441,7 +441,8 @@ fun SwiperScreen(
                         showResetHistoryButton = rememberProcessedMedia,
                         onResetHistory = viewModel::resetProcessedMedia,
                         onResetSingleFolderHistory = viewModel::showForgetMediaInFolderDialog,
-                        skippedCount = uiState.sessionSkippedCount,
+                        skippedCount = uiState.sessionSkippedMediaIds.size,
+                        onReviewSkipped = viewModel::reviewSkippedItems,
                         onClose = { (appContext as? Activity)?.finish() }
                     )
                 }
@@ -1574,6 +1575,7 @@ private fun AlreadyOrganizedDialog(
     onResetHistory: () -> Unit,
     onResetSingleFolderHistory: () -> Unit,
     skippedCount: Int,
+    onReviewSkipped: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(
@@ -1605,6 +1607,22 @@ private fun AlreadyOrganizedDialog(
             )
         }
         Spacer(modifier = Modifier.height(32.dp))
+        if (skippedCount > 0) {
+            Button(
+                onClick = onReviewSkipped,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.Redo,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Review Skipped Items")
+            }
+        }
         Button(
             onClick = onSelectNewFolders,
             modifier = Modifier
