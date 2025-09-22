@@ -53,6 +53,7 @@ import com.cleansweep.util.ThumbnailPrewarmer
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -67,6 +68,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.stateIn
@@ -104,7 +107,6 @@ data class SwiperUiState(
     val showForgetMediaSearchDialog: Boolean = false,
     val showSuccessAnimation: Boolean = false,
     val targetFolders: List<Pair<String, String>> = emptyList(),
-    val allFolderPathsForDialog: List<Pair<String, String>> = emptyList(),
     val targetFavorites: Set<String> = emptySet(),
     val pendingChanges: List<PendingChange> = emptyList(),
     val showSummarySheet: Boolean = false,
@@ -148,6 +150,7 @@ private data class SummaryLists(
     val groupedMoves: List<Pair<String, List<PendingChange>>>
 )
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class SwiperViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -227,7 +230,7 @@ class SwiperViewModel @Inject constructor(
     private var _defaultVideoSpeed = 1.0f
     private var lastUsedTargetPath: String? = null
     private val unindexedFileCounter = AtomicInteger(0)
-    private var folderDialogCollectionJob: Job? = null
+    private val _dialogSearchQuery = MutableStateFlow("")
 
     companion object {
         private const val TAG = "SwiperViewModel_DEBUG"
@@ -239,6 +242,7 @@ class SwiperViewModel @Inject constructor(
         observeTargetFolders()
         observeFileDeletions()
         observeAppLifecycle()
+        observeDialogSearchQuery()
         val savedChanges: List<PendingChange>? = savedStateHandle["pendingChanges"]
         if (savedChanges != null) {
             _uiState.update { currentState ->
@@ -256,7 +260,6 @@ class SwiperViewModel @Inject constructor(
 
     override fun onCleared() {
         logJitSummary()
-        folderDialogCollectionJob?.cancel()
         super.onCleared()
     }
 
@@ -272,6 +275,17 @@ class SwiperViewModel @Inject constructor(
             appLifecycleEventBus.appResumeEvent.collect {
                 validateStateAndRefreshData()
             }
+        }
+    }
+
+    private fun observeDialogSearchQuery() {
+        viewModelScope.launch {
+            _dialogSearchQuery
+                .debounce(200L)
+                .distinctUntilChanged()
+                .collect { query ->
+                    folderSearchManager.updateSearchQuery(query)
+                }
         }
     }
 
@@ -329,9 +343,6 @@ class SwiperViewModel @Inject constructor(
 
         initializeMedia(bucketIds)
 
-        if (currentState.showAddTargetFolderDialog) {
-            showAddTargetFolderDialog()
-        }
         if (currentState.showForgetMediaSearchDialog) {
             showForgetMediaInFolderDialog()
         }
@@ -991,34 +1002,16 @@ class SwiperViewModel @Inject constructor(
         }
     }
 
-
     fun showAddTargetFolderDialog() {
-        folderDialogCollectionJob?.cancel()
+        _uiState.update { it.copy(showAddTargetFolderDialog = true) }
         val currentTargetPaths = _uiState.value.targetFolders.map { it.first }.toSet()
+        val initialPath = _uiState.value.defaultCreationPath
 
-        // Background collection for live updates
-        folderDialogCollectionJob = viewModelScope.launch {
-            mediaRepository.observeFoldersForTargetDialog().collect { allFolders ->
-                val availableFolders = allFolders.filterNot { it.first in currentTargetPaths }
-                _uiState.update { it.copy(allFolderPathsForDialog = availableFolders) }
-
-                // Use the safe update function to prevent resetting user state
-                if (_uiState.value.showAddTargetFolderDialog) {
-                    folderSearchManager.updateSourceFolders(availableFolders)
-                }
-            }
-        }
-
-        // Fast path initialization with cached data
-        viewModelScope.launch {
-            val cachedFolders = mediaRepository.getCachedFolderSnapshot().filterNot { it.first in currentTargetPaths }
-            val initialPath = _uiState.value.defaultCreationPath
-            folderSearchManager.prepareWithPreFilteredList(
-                folders = cachedFolders,
-                initialPath = initialPath
-            )
-            _uiState.update { it.copy(showAddTargetFolderDialog = true) }
-        }
+        folderSearchManager.prepareForSearch(
+            initialPath = initialPath,
+            coroutineScope = viewModelScope,
+            excludedFolders = currentTargetPaths
+        )
     }
 
     fun showForgetMediaInFolderDialog() {
@@ -1033,33 +1026,21 @@ class SwiperViewModel @Inject constructor(
         }
     }
 
+    fun onDialogSearchQueryChanged(query: String) {
+        _dialogSearchQuery.value = query
+    }
+
     fun onPathSelected(path: String) {
-        viewModelScope.launch {
-            folderSearchManager.selectPath(path)
-        }
+        folderSearchManager.selectPath(path)
     }
 
     fun onSearchFocusChanged(isFocused: Boolean) {
         if (!isFocused) {
-            val searchState = folderSearchManager.state.value
-            if (searchState.searchQuery.isNotBlank()) {
-                val results = searchState.displayedResults
-                when (results.size) {
-                    1 -> {
-                        viewModelScope.launch {
-                            folderSearchManager.selectPath(results.first())
-                        }
-                    }
-                    else -> {
-                        folderSearchManager.updateSearchQuery("")
-                    }
-                }
-            }
+            folderSearchManager.revertSearchIfEmpty()
         }
     }
 
     fun dismissAddTargetFolderDialog() {
-        folderDialogCollectionJob?.cancel()
         folderSearchManager.reset()
         _uiState.update { it.copy(showAddTargetFolderDialog = false) }
     }
@@ -1116,15 +1097,8 @@ class SwiperViewModel @Inject constructor(
     }
 
     fun resetFolderSelectionToDefault() {
-        viewModelScope.launch {
-            val defaultPath = _uiState.value.defaultCreationPath
-            folderSearchManager.prepareForSearch(
-                initialPath = defaultPath,
-                coroutineScope = viewModelScope,
-                excludedFolders = emptySet(),
-                includePermanentlySorted = true
-            )
-        }
+        val defaultPath = _uiState.value.defaultCreationPath
+        folderSearchManager.selectPath(defaultPath)
     }
 
     private fun createAndAddTargetFolder(newFolderName: String, parentPath: String, addToFavorites: Boolean, alsoMove: Boolean) {

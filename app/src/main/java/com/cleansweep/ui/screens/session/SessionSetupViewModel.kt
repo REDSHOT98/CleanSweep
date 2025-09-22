@@ -17,7 +17,6 @@
 
 package com.cleansweep.ui.screens.session
 
-import android.os.Environment
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -26,6 +25,7 @@ import com.cleansweep.data.repository.FolderSelectionMode
 import com.cleansweep.data.repository.PreferencesRepository
 import com.cleansweep.domain.bus.FolderUpdateEvent
 import com.cleansweep.domain.bus.FolderUpdateEventBus
+import com.cleansweep.domain.model.FolderDetails
 import com.cleansweep.domain.repository.MediaRepository
 import com.cleansweep.ui.components.FolderSearchManager
 import com.cleansweep.util.FileOperationsHelper
@@ -35,7 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.Comparator
 import javax.inject.Inject
 
@@ -52,38 +51,19 @@ enum class FolderSortOption {
 // Define folder category
 data class FolderCategory(
     val name: String,
-    val folders: List<FolderInfo>
-)
-
-// Enhanced folder info
-data class FolderDetails(
-    val path: String, // The absolute file path, which is the unique ID
-    val name: String,
-    val itemCount: Int,
-    val totalSize: Long,
-    val isSystemFolder: Boolean,
-    val isPrimarySystemFolder: Boolean = false // New: Flag for canonical system folders
-)
-
-// Temporary FolderInfo class for UI compatibility
-data class FolderInfo(
-    val bucketId: String,
-    val bucketName: String,
-    val itemCount: Int,
-    val totalSize: Long,
-    val isSystemFolder: Boolean,
-    val isPrimarySystemFolder: Boolean // New: Flag for canonical system folders
+    val folders: List<FolderDetails>
 )
 
 data class SessionSetupUiState(
     val isInitialLoad: Boolean = true,
+    val showScanningMessage: Boolean = false,
     val allFolderDetails: List<FolderDetails> = emptyList(),
     val folderCategories: List<FolderCategory> = emptyList(),
-    val selectedBuckets: List<String> = emptyList(), // This now holds folder paths
+    val selectedBuckets: List<String> = emptyList(),
     val isRefreshing: Boolean = false,
-    val isDataStale: Boolean = false, // New flag for instant refresh feedback
+    val isSearching: Boolean = false, // New state for debounce race condition
     val error: String? = null,
-    val currentSortOption: FolderSortOption = FolderSortOption.SIZE_DESC, // Default sort by size
+    val currentSortOption: FolderSortOption = FolderSortOption.SIZE_DESC,
     val searchQuery: String = "",
     val favoriteFolders: Set<String> = emptySet(),
     val showFavoritesInSetup: Boolean = true,
@@ -94,7 +74,7 @@ data class SessionSetupUiState(
 
     // Mark as Sorted Dialog State
     val showMarkAsSortedConfirmation: Boolean = false,
-    val foldersToMarkAsSorted: List<FolderInfo> = emptyList(),
+    val foldersToMarkAsSorted: List<FolderDetails> = emptyList(),
     val dontAskAgainMarkAsSorted: Boolean = false,
 
     // Contextual Selection Mode
@@ -125,7 +105,7 @@ class SessionSetupViewModel @Inject constructor(
             )
 
     private var hasInitializedSelection = false
-    private var selectionToPreserve: List<String>? = null
+    private val _isManualRefreshing = MutableStateFlow(false)
 
 
     companion object {
@@ -134,33 +114,89 @@ class SessionSetupViewModel @Inject constructor(
     }
 
     init {
-        observeFolderUpdates()
-        val forceRefresh: Boolean = savedStateHandle.get<Boolean>("forceRefresh") ?: false
-        if (forceRefresh) {
-            _uiState.update { it.copy(isInitialLoad = true) }
+        initialize()
+    }
+
+    private fun initialize() {
+        viewModelScope.launch {
+            // Step 1: Check for cache existence to decide if we need to show the scanning message.
+            val hasCache = mediaRepository.hasCache()
+            if (!hasCache) {
+                // If no cache, show the scanning message before the blocking scan call.
+                _uiState.update { it.copy(showScanningMessage = true) }
+            }
+
+            // Step 2: Get initial folders. Fast if a cache exists, or it performs the initial scan.
+            val initialFolders = mediaRepository.getInitialFolderDetails()
+
+            // Step 3: Process the result and update the UI to its final loaded state.
+            val processedState = processFolderDetails(
+                foldersToProcess = initialFolders,
+                favorites = preferencesRepository.sourceFavoriteFoldersFlow.first(),
+                showFavorites = preferencesRepository.showFavoritesFirstInSetupFlow.first(),
+                query = _uiState.value.searchQuery,
+                sortOption = _uiState.value.currentSortOption
+            )
+            _uiState.update {
+                it.copy(
+                    isInitialLoad = false, // The initial load is now complete.
+                    showScanningMessage = false, // Hide the message regardless of the outcome.
+                    folderCategories = processedState.first,
+                    favoriteFolders = processedState.second,
+                    allFolderDetails = processedState.third
+                )
+            }
+
+            if (initialFolders.isNotEmpty()) {
+                Log.d(TAG, "Initialized ViewModel with ${initialFolders.size} folders.")
+                if (hasCache) {
+                    // If we started from a cache, trigger a non-blocking background check for external changes.
+                    mediaRepository.checkForChangesAndInvalidate()
+                }
+            } else {
+                Log.d(TAG, "Initialization complete. No media folders were found.")
+            }
+
+            // Step 4: Start observing all other flows for ongoing updates.
+            observeAndProcessFolderDetails()
+            observeRefreshStates()
+            observeFolderUpdates()
         }
-        observeAndProcessFolderDetails()
+    }
+
+    private fun observeRefreshStates() {
+        viewModelScope.launch {
+            combine(
+                _isManualRefreshing,
+                mediaRepository.isPerformingBackgroundRefresh
+            ) { isManual, isBackground ->
+                isManual || isBackground
+            }.distinctUntilChanged().collect { isRefreshing ->
+                _uiState.update { it.copy(isRefreshing = isRefreshing) }
+            }
+        }
     }
 
     private fun observeFolderUpdates() {
         viewModelScope.launch {
             folderUpdateEventBus.events.collect { event ->
                 if (event is FolderUpdateEvent.FullRefreshRequired) {
-                    Log.d(TAG, "FullRefreshRequired event received. Marking data as stale.")
+                    Log.d(TAG, "FullRefreshRequired event received. Triggering a manual refresh.")
                     hasInitializedSelection = false // Reset selection logic
-                    _uiState.update { it.copy(isDataStale = true) } // Show loading indicator immediately
+                    refreshFolders()
                 }
             }
         }
     }
 
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     private fun observeAndProcessFolderDetails() {
         viewModelScope.launch {
             val dbFolderDetailsFlow = mediaRepository.observeMediaFoldersWithDetails()
 
             val favoritesFlow = preferencesRepository.sourceFavoriteFoldersFlow
             val showFavoritesFlow = preferencesRepository.showFavoritesFirstInSetupFlow
-            val searchQueryFlow = _uiState.map { it.searchQuery }.distinctUntilChanged()
+            val searchQueryFlow = _uiState.map { it.searchQuery }.distinctUntilChanged().debounce(200L)
             val sortOptionFlow = _uiState.map { it.currentSortOption }.distinctUntilChanged()
 
             combine(
@@ -171,68 +207,27 @@ class SessionSetupViewModel @Inject constructor(
                 sortOptionFlow
             ) { foldersToProcess, favorites, showFavorites, query, sortOption ->
 
-                // Note: The repository flow now guarantees it only emits lists with itemCount > 0
-                val enrichedFolders = enrichWithPrimarySystemFolders(foldersToProcess)
-
-                val searchedFolders = if (query.isBlank()) {
-                    enrichedFolders
-                } else {
-                    enrichedFolders.filter { it.name.contains(query, ignoreCase = true) }
+                if (_isManualRefreshing.value && foldersToProcess.isEmpty()) {
+                    return@combine null // Skip emission during refresh wipe
                 }
+                processFolderDetails(foldersToProcess, favorites, showFavorites, query, sortOption)
 
-                val favoriteFolders = searchedFolders.filter { it.path in favorites }
-                val nonFavoriteFolders = searchedFolders.filter { it.path !in favorites }
-                val systemFolders = nonFavoriteFolders.filter { it.isSystemFolder }
-                val userFolders = nonFavoriteFolders.filter { !it.isSystemFolder }
-
-                val categories = listOfNotNull(
-                    if (showFavorites && favoriteFolders.isNotEmpty()) FolderCategory("Favorite Folders", favoriteFolders.map { it.toFolderInfo() }) else null,
-                    if (systemFolders.isNotEmpty()) FolderCategory("System Folders", systemFolders.map { it.toFolderInfo() }) else null,
-                    if (userFolders.isNotEmpty()) FolderCategory("User Folders", userFolders.map { it.toFolderInfo() }) else null
-                )
-
-                val sortedCategories = categories.map { category ->
-                    val primarySort: Comparator<FolderInfo> = if (category.name == "System Folders") {
-                        compareByDescending { it.isPrimarySystemFolder }
-                    } else {
-                        compareBy { 0 }
-                    }
-
-                    val secondarySort: Comparator<FolderInfo> = when (sortOption) {
-                        FolderSortOption.ALPHABETICAL_ASC -> compareBy { it.bucketName.lowercase() }
-                        FolderSortOption.ALPHABETICAL_DESC -> compareByDescending { it.bucketName.lowercase() }
-                        FolderSortOption.SIZE_ASC -> compareBy { it.totalSize }
-                        FolderSortOption.SIZE_DESC -> compareByDescending { it.totalSize }
-                        FolderSortOption.ITEM_COUNT_ASC -> compareBy { it.itemCount }
-                        FolderSortOption.ITEM_COUNT_DESC -> compareByDescending { it.itemCount }
-                    }
-
-                    category.copy(folders = category.folders.sortedWith(primarySort.then(secondarySort)))
-                }
-                Triple(sortedCategories, favorites, foldersToProcess) // Pass original `foldersToProcess`
-            }.catch { e ->
+            }.filterNotNull().catch { e ->
                 Log.e(TAG, "Error in folder processing flow", e)
-                _uiState.update { it.copy(error = "Failed to load media folders: ${e.message}") }
+                _uiState.update { it.copy(error = "Failed to load media folders: ${e.message}", isSearching = false) }
             }.collect { (newCategories, newFavorites, allFolders) ->
                 _uiState.update { currentState ->
-                    // Guard against UI flicker during refresh: if a refresh is active and an empty
-                    // list comes in, keep the old data until the real data arrives.
-                    val isFlickerGuardActive = allFolders.isEmpty() && currentState.isRefreshing
-                    val displayCategories = if (isFlickerGuardActive) currentState.folderCategories else newCategories
-                    val displayFolders = if (isFlickerGuardActive) currentState.allFolderDetails else allFolders
+                    val allAvailableFolderPaths = allFolders.map { it.path }.toSet()
 
-                    val allAvailableFolderPaths = displayFolders.map { it.path }.toSet()
+                    val sanitizedSelection = currentState.selectedBuckets.filter { it in allAvailableFolderPaths }
 
-                    val selectionSource = selectionToPreserve ?: currentState.selectedBuckets
-                    val sanitizedSelection = selectionSource.filter { it in allAvailableFolderPaths }
-
+                    // We keep isInitialLoad as false because the main flow should not revert this.
                     currentState.copy(
-                        folderCategories = displayCategories,
+                        folderCategories = newCategories,
                         favoriteFolders = newFavorites,
-                        allFolderDetails = displayFolders,
+                        allFolderDetails = allFolders,
                         selectedBuckets = sanitizedSelection,
-                        isInitialLoad = false, // The new repo flow guarantees the first emission is final.
-                        isDataStale = false // Data has arrived, clear the stale flag
+                        isSearching = false // Search is complete
                     )
                 }
 
@@ -244,6 +239,50 @@ class SessionSetupViewModel @Inject constructor(
         }
     }
 
+    private fun processFolderDetails(
+        foldersToProcess: List<FolderDetails>,
+        favorites: Set<String>,
+        showFavorites: Boolean,
+        query: String,
+        sortOption: FolderSortOption
+    ): Triple<List<FolderCategory>, Set<String>, List<FolderDetails>> {
+        val searchedFolders = if (query.isBlank()) {
+            foldersToProcess
+        } else {
+            foldersToProcess.filter { it.name.contains(query, ignoreCase = true) }
+        }
+
+        val favoriteFolders = searchedFolders.filter { it.path in favorites }
+        val nonFavoriteFolders = searchedFolders.filter { it.path !in favorites }
+        val systemFolders = nonFavoriteFolders.filter { it.isSystemFolder }
+        val userFolders = nonFavoriteFolders.filter { !it.isSystemFolder }
+
+        val categories = listOfNotNull(
+            if (showFavorites && favoriteFolders.isNotEmpty()) FolderCategory("Favorite Folders", favoriteFolders) else null,
+            if (systemFolders.isNotEmpty()) FolderCategory("System Folders", systemFolders) else null,
+            if (userFolders.isNotEmpty()) FolderCategory("User Folders", userFolders) else null
+        )
+
+        val sortedCategories = categories.map { category ->
+            val primarySort: Comparator<FolderDetails> = if (category.name == "System Folders") {
+                compareByDescending { it.isPrimarySystemFolder }
+            } else {
+                compareBy { 0 }
+            }
+
+            val secondarySort: Comparator<FolderDetails> = when (sortOption) {
+                FolderSortOption.ALPHABETICAL_ASC -> compareBy { it.name.lowercase() }
+                FolderSortOption.ALPHABETICAL_DESC -> compareByDescending { it.name.lowercase() }
+                FolderSortOption.SIZE_ASC -> compareBy { it.totalSize }
+                FolderSortOption.SIZE_DESC -> compareByDescending { it.totalSize }
+                FolderSortOption.ITEM_COUNT_ASC -> compareBy { it.itemCount }
+                FolderSortOption.ITEM_COUNT_DESC -> compareByDescending { it.itemCount }
+            }
+
+            category.copy(folders = category.folders.sortedWith(primarySort.then(secondarySort)))
+        }
+        return Triple(sortedCategories, favorites, foldersToProcess)
+    }
 
     private fun initializeSelection(allFolders: List<FolderDetails>) {
         viewModelScope.launch {
@@ -269,17 +308,14 @@ class SessionSetupViewModel @Inject constructor(
 
     fun refreshFolders() {
         viewModelScope.launch {
-            if (_uiState.value.isRefreshing) {
-                Log.d(TAG, "Refresh: Refresh already in progress. Ignoring request.")
+            if (_isManualRefreshing.value) {
+                Log.d(TAG, "Refresh: Manual refresh already in progress. Ignoring request.")
                 return@launch
             }
             Log.d(TAG, "Refreshing folders...")
             val startTime = System.currentTimeMillis()
-            selectionToPreserve = _uiState.value.selectedBuckets
-            _uiState.update { it.copy(isRefreshing = true) }
+            _isManualRefreshing.value = true
             try {
-                // This manually-triggered refresh still performs a full scan by clearing the DB cache.
-                // The underlying channelFlow will see the empty DB, rescan, and then emit the new list.
                 mediaRepository.getMediaFoldersWithDetails(forceRefresh = true)
             } catch (e: Exception) {
                 Log.e(TAG, "Error refreshing folders", e)
@@ -294,59 +330,19 @@ class SessionSetupViewModel @Inject constructor(
                         Log.d(TAG, "Refresh finished in ${elapsedTime}ms. Delaying for ${remainingTime}ms.")
                         delay(remainingTime)
                     }
-                    Log.d(TAG, "Refresh flow finished. Resetting isRefreshing flag.")
-                    _uiState.update { it.copy(isRefreshing = false) }
-                    selectionToPreserve = null // Clear the preserved selection
+                    Log.d(TAG, "Refresh flow finished. Resetting isManualRefreshing flag.")
+                    _isManualRefreshing.value = false
                 }
             }
         }
     }
-
-    private fun enrichWithPrimarySystemFolders(folders: List<FolderDetails>): List<FolderDetails> {
-        val primarySystemRootPaths = setOf(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_ALARMS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_NOTIFICATIONS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_AUDIOBOOKS)
-        ).mapNotNull { it?.absolutePath }.toSet()
-
-        val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
-        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-
-        val primarySystemSubFolderPaths = setOf(
-            File(dcimDir, "Camera").absolutePath,
-            File(picturesDir, "Screenshots").absolutePath
-        )
-
-        val allPrimaryPaths = primarySystemRootPaths + primarySystemSubFolderPaths
-
-        return folders.map { folder ->
-            folder.copy(isPrimarySystemFolder = folder.path in allPrimaryPaths)
-        }
-    }
-
-    private fun FolderDetails.toFolderInfo() = FolderInfo(
-        bucketId = this.path,
-        bucketName = this.name,
-        itemCount = this.itemCount,
-        totalSize = this.totalSize,
-        isSystemFolder = this.isSystemFolder,
-        isPrimarySystemFolder = this.isPrimarySystemFolder
-    )
 
     fun changeSortOption(sortOption: FolderSortOption) {
         _uiState.update { it.copy(currentSortOption = sortOption) }
     }
 
     fun updateSearchQuery(query: String) {
-        _uiState.update { it.copy(searchQuery = query) }
+        _uiState.update { it.copy(searchQuery = query, isSearching = true) }
     }
 
     fun selectBucket(bucketId: String) {
@@ -410,7 +406,7 @@ class SessionSetupViewModel @Inject constructor(
     fun selectAll() {
         _uiState.update { state ->
             state.copy(
-                selectedBuckets = state.folderCategories.flatMap { it.folders }.map { it.bucketId }
+                selectedBuckets = state.folderCategories.flatMap { it.folders }.map { it.path }
             )
         }
     }
@@ -473,7 +469,7 @@ class SessionSetupViewModel @Inject constructor(
         }
     }
 
-    fun markFolderAsSorted(folder: FolderInfo) {
+    fun markFolderAsSorted(folder: FolderDetails) {
         viewModelScope.launch {
             val shouldShowDialog = preferencesRepository.showConfirmMarkAsSortedFlow.first()
             if (shouldShowDialog) {
@@ -482,14 +478,14 @@ class SessionSetupViewModel @Inject constructor(
                     foldersToMarkAsSorted = listOf(folder)
                 ) }
             } else {
-                performMarkFoldersAsSorted(setOf(folder.bucketId))
+                performMarkFoldersAsSorted(setOf(folder.path))
             }
         }
     }
 
     fun confirmMarkFolderAsSorted() {
         viewModelScope.launch {
-            val folderPaths = _uiState.value.foldersToMarkAsSorted.map { it.bucketId }.toSet()
+            val folderPaths = _uiState.value.foldersToMarkAsSorted.map { it.path }.toSet()
             if (folderPaths.isEmpty()) return@launch
 
             if (_uiState.value.dontAskAgainMarkAsSorted) {
@@ -636,7 +632,7 @@ class SessionSetupViewModel @Inject constructor(
 
     fun contextualSelectAll() {
         _uiState.update { state ->
-            val allVisiblePaths = state.folderCategories.flatMap { it.folders }.map { it.bucketId }.toSet()
+            val allVisiblePaths = state.folderCategories.flatMap { it.folders }.map { it.path }.toSet()
             state.copy(
                 contextSelectedFolderPaths = allVisiblePaths,
                 canFavoriteContextualSelection = canFavoriteSelection(allVisiblePaths, state.allFolderDetails)
@@ -649,7 +645,6 @@ class SessionSetupViewModel @Inject constructor(
             val selectedPaths = _uiState.value.contextSelectedFolderPaths
             val foldersToMark = _uiState.value.allFolderDetails
                 .filter { it.path in selectedPaths }
-                .map { it.toFolderInfo() }
 
             if (foldersToMark.isEmpty()) {
                 exitContextualSelectionMode()

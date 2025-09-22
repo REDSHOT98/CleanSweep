@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cleansweep.domain.model.FolderDetails
 import com.cleansweep.ui.components.AppDialog
 import com.cleansweep.ui.components.AppDropdownMenu
 import com.cleansweep.ui.components.AppMenuDivider
@@ -117,7 +118,7 @@ fun SessionSetupScreen(
         }
     }
 
-    // Handle "Move Folder" dialog
+    // Handle "AddTargetFolder" dialog
     if (uiState.showMoveFolderDialogForPath != null) {
         FolderSearchDialog(
             state = folderSearchState,
@@ -143,12 +144,12 @@ fun SessionSetupScreen(
 
             if (foldersToMark.size == 1) {
                 val singleFolder = foldersToMark.first()
-                val isRecursive = singleFolder.bucketId in uiState.recursivelySelectedRoots
+                val isRecursive = singleFolder.path in uiState.recursivelySelectedRoots
                 titleText = "Mark as Sorted?"
                 bodyText = if (isRecursive) {
-                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' and its subfolders from this list? These folders won't show up here even if you add new media to them. You can reset this in the settings."
+                    "Are you sure you want to permanently hide '${singleFolder.name}' and its subfolders from this list? These folders won't show up here even if you add new media to them. You can reset this in the settings."
                 } else {
-                    "Are you sure you want to permanently hide '${singleFolder.bucketName}' from this list? This folder won't show up here even if you add new media to it. You can reset this in the settings."
+                    "Are you sure you want to permanently hide '${singleFolder.name}' from this list? This folder won't show up here even if you add new media to it. You can reset this in the settings."
                 }
             } else {
                 titleText = "Mark ${foldersToMark.size} Folders as Sorted?"
@@ -306,36 +307,59 @@ fun SessionSetupScreen(
                 ),
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") }
             )
-            if (uiState.isInitialLoad) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Scanning device for media folders...",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+            PullToRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = viewModel::refreshFolders,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when {
+                    // Case 1: Initial load, show the scanning message (true first launch/app's data deletion).
+                    uiState.isInitialLoad && uiState.showScanningMessage -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Scanning device for media folders...",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
-                }
-            } else {
-                PullToRefreshBox(
-                    isRefreshing = uiState.isRefreshing || uiState.isDataStale,
-                    onRefresh = viewModel::refreshFolders,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    if (uiState.folderCategories.isEmpty()) {
-                        // WRAP the empty state in a LazyColumn to make it scrollable,
-                        // which is required for PullToRefreshBox to work correctly.
+
+                    // Case 2: Initial load from cache. Show nothing.
+                    uiState.isInitialLoad -> {
+                        // Render a just the skeleton while the cache loads.
+                    }
+
+                    // Case 3: Load complete, but device has no media folders at all.
+                    uiState.allFolderDetails.isEmpty() -> {
                         LazyColumn(modifier = Modifier.fillMaxSize()) {
                             item {
                                 EmptyStateMessage(modifier = Modifier.fillParentMaxSize())
                             }
                         }
-                    } else {
+                    }
+
+                    // Case 4: Load complete, but the current search query filters them all out.
+                    // Only show this if a search is not actively in progress.
+                    uiState.folderCategories.isEmpty() && !uiState.isSearching -> {
+                        LazyColumn(modifier = Modifier.fillMaxSize()) {
+                            item {
+                                NoSearchResultsMessage(
+                                    searchQuery = uiState.searchQuery,
+                                    modifier = Modifier.fillParentMaxSize()
+                                )
+                            }
+                        }
+                    }
+
+                    // Case 5: Load complete, display the folder list (or the old list while a new search is debouncing).
+                    else -> {
                         val listState = rememberLazyListState()
                         Box(modifier = Modifier.fillMaxSize()) {
                             LazyColumn(
@@ -359,35 +383,35 @@ fun SessionSetupScreen(
                                                 modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
                                             )
                                         }
-                                        items(category.folders, key = { it.bucketId }) { folderInfo ->
-                                            val isSelectedForSession = folderInfo.bucketId in uiState.selectedBuckets
-                                            val isSelectedForContext = folderInfo.bucketId in uiState.contextSelectedFolderPaths
+                                        items(category.folders, key = { it.path }) { folder ->
+                                            val isSelectedForSession = folder.path in uiState.selectedBuckets
+                                            val isSelectedForContext = folder.path in uiState.contextSelectedFolderPaths
                                             EnhancedFolderItem(
-                                                folderInfo = folderInfo,
+                                                folder = folder,
                                                 isSelected = if (uiState.isContextualSelectionMode) isSelectedForContext else isSelectedForSession,
                                                 isContextualMode = uiState.isContextualSelectionMode,
-                                                isFavorite = folderInfo.bucketId in uiState.favoriteFolders,
-                                                isRecursiveRoot = folderInfo.bucketId in uiState.recursivelySelectedRoots,
+                                                isFavorite = folder.path in uiState.favoriteFolders,
+                                                isRecursiveRoot = folder.path in uiState.recursivelySelectedRoots,
                                                 onToggle = {
                                                     if (uiState.isContextualSelectionMode) {
-                                                        viewModel.toggleContextualSelection(folderInfo.bucketId)
+                                                        viewModel.toggleContextualSelection(folder.path)
                                                     } else {
                                                         if (isSelectedForSession) {
-                                                            viewModel.unselectBucket(folderInfo.bucketId)
+                                                            viewModel.unselectBucket(folder.path)
                                                         } else {
-                                                            viewModel.selectBucket(folderInfo.bucketId)
+                                                            viewModel.selectBucket(folder.path)
                                                         }
                                                     }
                                                 },
                                                 onLongPress = {
-                                                    viewModel.enterContextualSelectionMode(folderInfo.bucketId)
+                                                    viewModel.enterContextualSelectionMode(folder.path)
                                                 },
-                                                onToggleFavorite = { viewModel.toggleFavorite(folderInfo.bucketId) },
-                                                onSelectRecursively = { viewModel.selectFolderRecursively(folderInfo.bucketId) },
-                                                onDeselectRecursively = { viewModel.deselectChildren(folderInfo.bucketId) },
-                                                onRename = { viewModel.showRenameDialog(folderInfo.bucketId) },
-                                                onMove = { viewModel.showMoveFolderDialog(folderInfo.bucketId) },
-                                                onMarkAsSorted = { viewModel.markFolderAsSorted(folderInfo) }
+                                                onToggleFavorite = { viewModel.toggleFavorite(folder.path) },
+                                                onSelectRecursively = { viewModel.selectFolderRecursively(folder.path) },
+                                                onDeselectRecursively = { viewModel.deselectChildren(folder.path) },
+                                                onRename = { viewModel.showRenameDialog(folder.path) },
+                                                onMove = { viewModel.showMoveFolderDialog(folder.path) },
+                                                onMarkAsSorted = { viewModel.markFolderAsSorted(folder) }
                                             )
                                         }
                                     }
@@ -429,6 +453,39 @@ private fun EmptyStateMessage(modifier: Modifier = Modifier) {
             )
             Text(
                 text = "This can happen on a new device. Try adding some photos or videos, or pull down to re-scan.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoSearchResultsMessage(searchQuery: String, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(bottom = 64.dp) // Offset from FABs
+        ) {
+            Icon(
+                imageVector = Icons.Default.SearchOff,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.surfaceVariant
+            )
+            Text(
+                text = "No results found",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Your search for \"$searchQuery\" did not match any folder names.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -608,7 +665,7 @@ private fun ContextualTopAppBar(
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun EnhancedFolderItem(
-    folderInfo: FolderInfo,
+    folder: FolderDetails,
     isSelected: Boolean,
     isContextualMode: Boolean,
     isFavorite: Boolean,
@@ -667,7 +724,7 @@ private fun EnhancedFolderItem(
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
-                if (folderInfo.isPrimarySystemFolder) {
+                if (folder.isPrimarySystemFolder) {
                     Text(
                         text = "S",
                         color = MaterialTheme.colorScheme.onPrimary,
@@ -683,9 +740,9 @@ private fun EnhancedFolderItem(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(text = folderInfo.bucketName, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = folder.name, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    text = "${folderInfo.itemCount} items · ${formatFileSize(folderInfo.totalSize)}",
+                    text = "${folder.itemCount} items · ${formatFileSize(folder.totalSize)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = secondaryTextColor
                 )
@@ -736,17 +793,17 @@ private fun EnhancedFolderItem(
                                 if (isRecursiveRoot) {
                                     onDeselectRecursively()
                                 } else {
-                                    onSelectRecursively(folderInfo.bucketId)
+                                    onSelectRecursively(folder.path)
                                 }
                                 showContextMenu = false
                             },
                             leadingIcon = { Icon(Icons.Default.AccountTree, null) }
                         )
-                        if (!folderInfo.isSystemFolder) {
+                        if (!folder.isSystemFolder) {
                             DropdownMenuItem(
                                 text = { Text(if (isFavorite) "Remove from Favorites" else "Add to Favorites") },
                                 onClick = {
-                                    onToggleFavorite(folderInfo.bucketId)
+                                    onToggleFavorite(folder.path)
                                     showContextMenu = false
                                 },
                                 leadingIcon = {

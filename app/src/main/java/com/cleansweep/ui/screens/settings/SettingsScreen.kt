@@ -151,6 +151,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val debouncedSearchQuery by viewModel.debouncedSearchQuery.collectAsState()
     val scope = rememberCoroutineScope()
     val folderSearchState by viewModel.folderSearchManager.state.collectAsState()
     val currentTheme by viewModel.currentTheme.collectAsState()
@@ -704,14 +705,14 @@ fun SettingsScreen(
             )
         }
 
-        val filteredSections = remember(uiState.searchQuery, settingSections) {
-            if (uiState.searchQuery.isBlank()) {
+        val filteredSections = remember(debouncedSearchQuery, settingSections) {
+            if (debouncedSearchQuery.isBlank()) {
                 settingSections
             } else {
                 settingSections.mapNotNull { section ->
-                    val sectionTitleMatches = section.title.contains(uiState.searchQuery, ignoreCase = true)
+                    val sectionTitleMatches = section.title.contains(debouncedSearchQuery, ignoreCase = true)
                     val matchingItems = section.items.filter { item ->
-                        item.keywords.any { it.contains(uiState.searchQuery, ignoreCase = true) }
+                        item.keywords.any { it.contains(debouncedSearchQuery, ignoreCase = true) }
                     }
                     if (sectionTitleMatches || matchingItems.isNotEmpty()) {
                         // If the section title matches, show all items, otherwise show only matching items
@@ -752,9 +753,9 @@ fun SettingsScreen(
             }
 
             // Show a message if no results are found
-            if (filteredSections.isEmpty() && uiState.searchQuery.isNotBlank()) {
+            if (filteredSections.isEmpty() && debouncedSearchQuery.isNotBlank()) {
                 Text(
-                    text = "No settings found for \"${uiState.searchQuery}\"",
+                    text = "No settings found for \"$debouncedSearchQuery\"",
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 24.dp),
@@ -876,7 +877,7 @@ fun SettingsScreen(
             title = "Forget Sorted Media",
             searchLabel = "Search for a folder...",
             confirmButtonText = "Forget",
-            autoConfirmOnSelection = false,
+            autoConfirmOnSelection = true,
             onDismiss = viewModel::dismissFolderSearchDialog,
             onQueryChanged = viewModel.folderSearchManager::updateSearchQuery,
             onFolderSelected = { path -> viewModel.forgetSortedMediaInFolder(path) },

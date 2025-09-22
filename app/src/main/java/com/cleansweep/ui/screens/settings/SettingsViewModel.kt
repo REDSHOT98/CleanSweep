@@ -44,6 +44,7 @@ import com.cleansweep.ui.components.FolderSearchManager
 import com.cleansweep.ui.theme.AppTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -90,6 +91,7 @@ data class SettingsUiState(
     val showGitHubSuspensionDialog: Boolean = false
 )
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -103,6 +105,13 @@ class SettingsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    val debouncedSearchQuery: StateFlow<String>
+        get() = _uiState
+            .map { it.searchQuery }
+            .debounce(200L)
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     val currentTheme: StateFlow<AppTheme> = preferencesRepository.themeFlow
         .stateIn(

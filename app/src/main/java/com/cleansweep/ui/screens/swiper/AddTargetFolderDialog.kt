@@ -82,7 +82,6 @@ fun AddTargetFolderDialog(
     addFolderFocusTarget: AddFolderFocusTarget,
     addFavoriteToTargetByDefault: Boolean,
     hintOnExistingFolderName: Boolean,
-    allFolderPaths: List<String>,
     currentItemPath: String?,
     targetFavorites: Set<String>,
     onDismissRequest: () -> Unit,
@@ -130,24 +129,35 @@ fun AddTargetFolderDialog(
         }
     }
 
-    val hintState = remember(newFolderName, folderSearchState.browsePath, hintOnExistingFolderName, allFolderPaths) {
+    val hintState = remember(newFolderName, folderSearchState.browsePath, hintOnExistingFolderName, folderSearchState.allFolders) {
         if (hintOnExistingFolderName && newFolderName.isNotBlank() && folderSearchState.browsePath != null) {
             val parentPath = folderSearchState.browsePath
             val newFullPath = File(parentPath, newFolderName).absolutePath
             var exactMatchPath: String? = null
             var similarMatchPath: String? = null
-            var minDistance = 3 // Only check for typos with distance 1 or 2
+            var minDistance = Int.MAX_VALUE
+
+            val allFolderPaths = folderSearchState.allFolders.map { it.first }
             for (path in allFolderPaths) {
                 // Check for exact match first
                 if (path.equals(newFullPath, ignoreCase = true)) {
                     exactMatchPath = path
                     break // Exact match is highest priority, no need to check further
                 }
+
                 // Check for similar names only within the same parent directory
                 val existingFile = File(path)
                 if (existingFile.parent.equals(parentPath, ignoreCase = true)) {
                     val distance = levenshtein(newFolderName, existingFile.name)
-                    if (distance in 1 until minDistance) {
+                    val nameLength = newFolderName.length
+
+                    val isSimilar = when {
+                        nameLength in 1..3 -> distance == 1
+                        nameLength > 3 -> distance > 0 && distance < (nameLength * 0.4)
+                        else -> false
+                    }
+
+                    if (isSimilar && distance < minDistance) {
                         minDistance = distance
                         similarMatchPath = path
                     }
@@ -256,11 +266,10 @@ fun AddTargetFolderDialog(
                             }
                         }
                     }
-                    val displayedPath = folderSearchState.browsePath
-                    if (displayedPath != null) {
+                    if (folderSearchState.browsePath != null && folderSearchState.searchQuery.isBlank()) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
                         Text(
-                            text = "Selected: .../${displayedPath.takeLast(35)}",
+                            text = "Selected: .../${folderSearchState.browsePath.takeLast(35)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier

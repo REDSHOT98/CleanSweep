@@ -36,9 +36,9 @@ import com.cleansweep.di.AppModule
 import com.cleansweep.domain.bus.AppLifecycleEventBus
 import com.cleansweep.domain.bus.FolderUpdateEvent
 import com.cleansweep.domain.bus.FolderUpdateEventBus
+import com.cleansweep.domain.model.FolderDetails
 import com.cleansweep.domain.model.IndexingStatus
 import com.cleansweep.domain.repository.MediaRepository
-import com.cleansweep.ui.screens.session.FolderDetails
 import com.cleansweep.util.FileManager
 import com.cleansweep.util.FileOperationsHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -79,9 +79,10 @@ class DirectMediaRepositoryImpl @Inject constructor(
     @Volatile
     private var lastKnownFolderState: Set<String>? = null
 
-    // In-session cache for the slow empty folder scan
-    @Volatile
-    private var emptyFolderListCache: List<Pair<String, String>>? = null
+    private val _isPerformingBackgroundRefresh = MutableStateFlow(false)
+    override val isPerformingBackgroundRefresh: StateFlow<Boolean> = _isPerformingBackgroundRefresh.asStateFlow()
+    private val isBackgroundRefreshRunning = AtomicBoolean(false)
+
 
     init {
         // Listen for folder updates and apply them directly to the DB cache.
@@ -93,8 +94,7 @@ class DirectMediaRepositoryImpl @Inject constructor(
     private fun listenForAppLifecycle() {
         externalScope.launch {
             appLifecycleEventBus.appResumeEvent.collect {
-                Log.d("CacheDebug", "App resumed, invalidating empty folder session cache.")
-                emptyFolderListCache = null
+                // On-resume logic is now handled by MainViewModel calling checkForChangesAndInvalidate()
             }
         }
     }
@@ -141,13 +141,6 @@ class DirectMediaRepositoryImpl @Inject constructor(
                             )
                             folderDetailsDao.upsert(newCacheEntry)
                         }
-                        // Surgically update the empty folder cache if it exists
-                        emptyFolderListCache?.let { currentCache ->
-                            if (currentCache.none { it.first == event.path }) {
-                                emptyFolderListCache = (currentCache + (event.path to event.name))
-                                    .sortedBy { it.second.lowercase(Locale.ROOT) }
-                            }
-                        }
                     }
                     is FolderUpdateEvent.FullRefreshRequired -> {
                         // The event signals that a significant change happened elsewhere.
@@ -177,72 +170,55 @@ class DirectMediaRepositoryImpl @Inject constructor(
     )
 
     override suspend fun checkForChangesAndInvalidate(): Boolean = withContext(Dispatchers.IO) {
-        Log.d("CacheDebug", "Checking for external changes...")
-        val cachedFolders = folderDetailsDao.getAll().first()
-        if (cachedFolders.isEmpty()) {
-            Log.d("CacheDebug", "Cache is empty, no external check needed.")
-            // No need to invalidate, an empty cache will trigger a scan on its own.
+        if (isBackgroundRefreshRunning.compareAndSet(false, true)) {
+            Log.d("CacheDebug", "Starting background folder refresh check.")
+            var changesFound = false
+            try {
+                // This check is now only for existing caches. The initial scan is triggered by the observer.
+                val hasCache = folderDetailsDao.getAll().first().isNotEmpty()
+                if (!hasCache) {
+                    Log.d("CacheDebug", "Cache is empty, skipping on-resume check. Observer will trigger initial scan.")
+                    return@withContext false
+                }
+
+                _isPerformingBackgroundRefresh.value = true
+
+                // --- SCAN ---
+                val (mediaFolderDetails, _) = performSinglePassFileSystemScan()
+                val targetFolders = findViableTargetFolders()
+                val newMediaFolderCacheEntries = mediaFolderDetails.map { it.toFolderDetailsCache() }
+                val newTargetFolderCacheEntries = targetFolders.map { (path, name) ->
+                    FolderDetailsCache(path = path, name = name, itemCount = 0, totalSize = 0, isSystemFolder = false)
+                }
+                val allNewFolderCacheEntries = (newMediaFolderCacheEntries + newTargetFolderCacheEntries)
+                    .distinctBy { it.path }
+
+                // --- COMPARE ---
+                val currentCache = folderDetailsDao.getAll().first().toSet()
+                val newCache = allNewFolderCacheEntries.toSet()
+
+                if (currentCache != newCache) {
+                    Log.d("CacheDebug", "Change detected. Old count: ${currentCache.size}, New count: ${newCache.size}. Updating cache.")
+                    changesFound = true
+                    // --- ATOMIC SWAP ---
+                    folderDetailsDao.replaceAll(allNewFolderCacheEntries)
+                    Log.d("CacheDebug", "Cache atomically updated via DAO transaction.")
+                } else {
+                    Log.d("CacheDebug", "No external changes detected. Cache is up-to-date.")
+                }
+            } catch (e: Exception) {
+                Log.e("CacheDebug", "Error during background folder refresh", e)
+                changesFound = false // Don't signal a change if an error occurred
+            } finally {
+                _isPerformingBackgroundRefresh.value = false
+                isBackgroundRefreshRunning.set(false)
+                Log.d("CacheDebug", "Background folder refresh check finished.")
+            }
+            return@withContext changesFound
+        } else {
+            Log.d("CacheDebug", "Skipping background refresh: already in progress.")
             return@withContext false
         }
-
-        var changesFound = false
-        val cachedFolderPaths = cachedFolders.map { it.path }.toSet()
-
-        // 1. More reliable check for deleted folders by checking the file system directly.
-        val physicallyDeletedPaths = cachedFolders.filter { !File(it.path).exists() }.map { it.path }
-        if (physicallyDeletedPaths.isNotEmpty()) {
-            Log.d("CacheDebug", "Found ${physicallyDeletedPaths.size} physically deleted folders. Removing from cache.")
-            folderDetailsDao.deleteByPath(physicallyDeletedPaths)
-            changesFound = true
-        }
-
-        // 2. Intelligent check for new folders, respecting app's filtering logic.
-        val permanentlySortedFolders = preferencesRepository.permanentlySortedFoldersFlow.first()
-        val mediaStorePaths = getMediaStoreFolderPaths().filter { path ->
-            isSafeDestination(path) && path !in permanentlySortedFolders && !File(path).name.startsWith(".")
-        }.toSet()
-
-        val newFolders = mediaStorePaths - cachedFolderPaths
-        if (newFolders.isNotEmpty()) {
-            Log.d("CacheDebug", "Found ${newFolders.size} new external folders. Surgically adding to cache.")
-            newFolders.forEach { rescanSingleFolderAndUpdateCache(it) }
-            changesFound = true
-        }
-
-        Log.d("CacheDebug", "External change check complete. Changes found: $changesFound")
-        return@withContext changesFound
-    }
-
-    private suspend fun getMediaStoreFolderPaths(): Set<String> = withContext(Dispatchers.IO) {
-        val folderPaths = mutableSetOf<String>()
-        val projection = arrayOf(MediaStore.Files.FileColumns.DATA)
-        val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?)"
-        val selectionArgs = arrayOf(
-            MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
-            MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString()
-        )
-        val queryUri = MediaStore.Files.getContentUri("external")
-
-        try {
-            context.contentResolver.query(queryUri, projection, selection, selectionArgs, null)?.use { cursor ->
-                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA)
-                while (cursor.moveToNext()) {
-                    currentCoroutineContext().ensureActive()
-                    val path = cursor.getString(dataColumn)
-                    // Ensure path exists and has a parent before adding
-                    if (path != null) {
-                        File(path).parentFile?.let { parentFile ->
-                            if (parentFile.name != "To Edit") {
-                                folderPaths.add(parentFile.absolutePath)
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "Failed to get MediaStore folder paths", e)
-        }
-        return@withContext folderPaths
     }
 
     private fun invalidateCaches() {
@@ -256,16 +232,11 @@ class DirectMediaRepositoryImpl @Inject constructor(
     override fun invalidateFolderCache() {
         Log.d("CacheDebug", "Forced invalidation. Clearing all folder caches (Memory, DB, and state).")
         lastKnownFolderState = null
-        emptyFolderListCache = null
         invalidateCaches()
     }
 
     override suspend fun getCachedFolderSnapshot(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
         return@withContext folderDetailsDao.getAll().first().map { it.path to it.name }
-    }
-
-    private suspend fun getCurrentMediaStoreFolders(): Set<String> = withContext(Dispatchers.IO) {
-        return@withContext scanForAllMediaFoldersRecursively()
     }
 
     private val supportedImageExtensions = setOf("jpg", "jpeg", "png", "gif", "bmp", "webp", "heic", "heif")
@@ -510,63 +481,6 @@ class DirectMediaRepositoryImpl @Inject constructor(
         val paths = observeAllFolders().first().map { it.first }
         Log.d("CacheDebug", "Returning snapshot of folder paths: ${paths.size} items.")
         return@withContext paths
-    }
-
-    override fun observeFoldersForTargetDialog(): Flow<List<Pair<String, String>>> {
-        val mediaFoldersFlow = folderDetailsDao.getAll().map { cacheList ->
-            cacheList.map { it.path to it.name }
-        }
-
-        val emptyFoldersFlow = flow {
-            // Fast path: use in-session cache if available
-            val cachedEmptyFolders = emptyFolderListCache
-            if (cachedEmptyFolders != null) {
-                Log.d("CacheDebug", "Emitting ${cachedEmptyFolders.size} empty folders from session cache.")
-                emit(cachedEmptyFolders)
-                return@flow
-            }
-
-            // Slow path: scan file system
-            Log.d("CacheDebug", "Session cache miss for empty folders. Scanning file system.")
-            val emptyFolders = scanForEmptyFoldersRecursively()
-            emptyFolderListCache = emptyFolders
-            emit(emptyFolders)
-        }.flowOn(Dispatchers.IO) // Ensure scan runs off the main thread
-
-        return combine(mediaFoldersFlow, emptyFoldersFlow) { mediaFolders, emptyFolders ->
-            (mediaFolders + emptyFolders)
-                .distinctBy { it.first }
-                .sortedBy { it.second.lowercase(Locale.ROOT) }
-        }.flowOn(Dispatchers.Default) // Combine and sort on a computation thread
-    }
-
-    private suspend fun scanForEmptyFoldersRecursively(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
-        val emptyFolders = mutableListOf<Pair<String, String>>()
-        val queue: Queue<File> = ArrayDeque()
-
-        Environment.getExternalStorageDirectory()?.let { queue.add(it) }
-
-        while (queue.isNotEmpty()) {
-            currentCoroutineContext().ensureActive()
-            val directory = queue.poll() ?: continue
-
-            if (directory.name == "To Edit" || !directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
-                continue
-            }
-
-            try {
-                val files = directory.listFiles()
-                if (files.isNullOrEmpty()) {
-                    emptyFolders.add(directory.absolutePath to directory.name)
-                } else {
-                    files.filter { it.isDirectory }.forEach { queue.add(it) }
-                }
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "scanForEmptyFoldersRecursively: Failed to access directory: ${directory.path}", e)
-            }
-        }
-        Log.d("CacheDebug", "Found ${emptyFolders.size} empty folders from direct scan.")
-        return@withContext emptyFolders
     }
 
     private suspend fun createMediaItemFromFile(file: File): MediaItem? = withContext(Dispatchers.IO) {
@@ -896,130 +810,217 @@ class DirectMediaRepositoryImpl @Inject constructor(
         val parentPath = folder.parent ?: return false
         return parentPath in standardPaths && folder.name.lowercase(Locale.ROOT) in conventionalNames
     }
+    override suspend fun hasCache(): Boolean = withContext(Dispatchers.IO) {
+        return@withContext folderDetailsDao.getAll().first().isNotEmpty()
+    }
+
+    override suspend fun getInitialFolderDetails(): List<FolderDetails> = withContext(Dispatchers.IO) {
+        val dbCache = folderDetailsDao.getAll().first()
+        if (dbCache.isNotEmpty()) {
+            return@withContext dbCache
+                .filter { it.itemCount > 0 }
+                .map { it.toFolderDetails() }
+        } else {
+            // First launch scenario: no cache exists. Trigger a blocking scan to populate it.
+            return@withContext getMediaFoldersWithDetails(forceRefresh = true)
+        }
+    }
 
     override suspend fun getMediaFoldersWithDetails(forceRefresh: Boolean): List<FolderDetails> =
         withContext(Dispatchers.IO) {
-            if (folderDetailsCache != null && !forceRefresh && lastFileDiscoveryCache != null) {
-                Log.d("CacheDebug", "L1 Cache Hit: Returning in-memory folder details.")
-                return@withContext folderDetailsCache!!
-            }
-
-            if (forceRefresh) {
-                Log.d("CacheDebug", "Force refresh requested. Clearing L2 DB cache.")
-                folderDetailsDao.clear()
-            } else {
+            if (!forceRefresh) {
                 val dbCache = folderDetailsDao.getAll().first()
                 if (dbCache.isNotEmpty()) {
                     Log.d("CacheDebug", "L2 Cache Hit: Returning folder details from database.")
-                    val details = dbCache.map { it.toFolderDetails() }
+                    val details = dbCache.map { it.toFolderDetails() }.filter { it.itemCount > 0 }
                     folderDetailsCache = details
                     return@withContext details
                 }
             }
 
-            Log.d("CacheDebug", "Cache Miss: Scanning file system for folder details.")
-            val (finalDetailsList, discoveredFiles) = scanFileSystemForFolderDetails()
-            Log.d("CacheDebug", "Scan complete. Populating discovery cache with ${discoveredFiles.size} files.")
+            Log.d("CacheDebug", "Force refresh or empty cache. Starting two-stage scan.")
+            // STAGE 1: Scan for media folders and atomically replace the cache.
+            val mediaFolders = scanAndCacheMediaFolders()
 
-            lastFileDiscoveryCache = discoveredFiles
-            folderDetailsCache = finalDetailsList
-            folderDetailsDao.upsertAll(finalDetailsList.map { it.toFolderDetailsCache() })
-
-            return@withContext finalDetailsList
+            // STAGE 2: Launch a background, fire-and-forget task to find all other folders.
+            externalScope.launch {
+                scanAndCacheNonMediaFolders()
+            }
+            return@withContext mediaFolders
         }
 
     override fun observeMediaFoldersWithDetails(): Flow<List<FolderDetails>> =
         folderDetailsDao.getAll()
-            .transformLatest { cachedList ->
-                // This atomic is a guard to ensure the expensive file scan only ever runs once
-                // per app session, even if multiple collectors subscribe.
-                val isScanNeeded = AtomicBoolean(cachedList.isEmpty())
-
-                if (isScanNeeded.get()) {
-                    Log.d("CacheDebug", "transformLatest: DB is empty, triggering scan.")
-                    val (details, _) = scanFileSystemForFolderDetails()
-
-                    if (details.isEmpty()) {
-                        // Scan found nothing. This is the definitive empty state for a fresh device.
-                        // Emit it so the UI can stop loading.
-                        Log.d("CacheDebug", "transformLatest: Scan found no folders. Emitting definitive empty list.")
-                        emit(emptyList())
-                    } else {
-                        // Scan found folders. Upsert them into the database.
-                        // The `transformLatest` operator will see the new DB emission, cancel this
-                        // current block, and re-run with the `cachedList` populated, hitting the `else`
-                        // block below. We do not emit here to prevent duplicate data.
-                        Log.d("CacheDebug", "transformLatest: Scan found ${details.size} folders. Upserting to DB.")
-                        folderDetailsDao.upsertAll(details.map { it.toFolderDetailsCache() })
-                    }
-                } else {
-                    // The DB has data. Transform it and emit. This is the normal path for updates.
-                    Log.d("CacheDebug", "transformLatest: Emitting ${cachedList.size} folders from DB.")
-                    val transformedList = cachedList.map { it.toFolderDetails() }.filter { it.itemCount > 0 }
-                    emit(transformedList)
-                }
+            .map { cacheList ->
+                cacheList
+                    .filter { it.itemCount > 0 }
+                    .map { it.toFolderDetails() }
             }
             .flowOn(Dispatchers.IO)
 
-    private suspend fun scanFileSystemForFolderDetails(): Pair<List<FolderDetails>, List<File>> = withContext(Dispatchers.IO) {
-        val processedPaths = preferencesRepository.processedMediaPathsFlow.first()
-        val permanentlySortedFolders = preferencesRepository.permanentlySortedFoldersFlow.first()
-        val allMediaFolders = scanForAllMediaFoldersRecursively()
+    /**
+     * STAGE 1 of the scan. Finds only folders containing media, calculates their details,
+     * saves them to the database, and returns the result. This is the fast path for the UI.
+     * This now uses the atomic replaceAll to prevent flicker.
+     */
+    private suspend fun scanAndCacheMediaFolders(): List<FolderDetails> = withContext(Dispatchers.IO) {
+        val (finalDetailsList, discoveredFiles) = performSinglePassFileSystemScan()
+        Log.d("CacheDebug", "Scan Stage 1 (Media) complete. Found ${finalDetailsList.size} folders.")
 
-        val folderDetailsList = mutableListOf<FolderDetails>()
-        val allDiscoveredFiles = mutableListOf<File>()
+        lastFileDiscoveryCache = discoveredFiles
+        folderDetailsCache = finalDetailsList
 
-        for (folderPath in allMediaFolders) {
+        // The atomic replaceAll in the DAO prevents flicker. If no folders are found,
+        // it will correctly clear the cache.
+        folderDetailsDao.replaceAll(finalDetailsList.map { it.toFolderDetailsCache() })
+
+        return@withContext finalDetailsList
+    }
+
+    /**
+     * STAGE 2 of the scan. Finds all folders that are viable move targets (empty or contain only other folders).
+     * This runs in the background and updates the cache to make it fully comprehensive for features like FolderSearchManager.
+     */
+    private suspend fun scanAndCacheNonMediaFolders() = withContext(Dispatchers.IO) {
+        Log.d("CacheDebug", "Scan Stage 2 (Target Folders) started...")
+        val targetFolders = findViableTargetFolders()
+        if (targetFolders.isNotEmpty()) {
+            val cacheEntries = targetFolders.map { (path, name) ->
+                FolderDetailsCache(
+                    path = path,
+                    name = name,
+                    itemCount = 0,
+                    totalSize = 0,
+                    isSystemFolder = false // Default for non-media folders
+                )
+            }
+            folderDetailsDao.upsertAll(cacheEntries)
+            Log.d("CacheDebug", "Scan Stage 2 complete. Cached ${cacheEntries.size} additional target folders.")
+        } else {
+            Log.d("CacheDebug", "Scan Stage 2 complete. No new target folders found.")
+        }
+    }
+
+    private suspend fun findViableTargetFolders(): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        val targetFolders = mutableListOf<Pair<String, String>>()
+        val queue: Queue<File> = ArrayDeque()
+
+        Environment.getExternalStorageDirectory()?.let { queue.add(it) }
+
+        while (queue.isNotEmpty()) {
             currentCoroutineContext().ensureActive()
-            if (folderPath in permanentlySortedFolders) continue
+            val directory = queue.poll() ?: continue
 
-            val folderFile = File(folderPath)
-            if (!folderFile.exists() || !folderFile.isDirectory) continue
-
-            var itemCount = 0
-            var totalSize = 0L
-            val filesInFolder = mutableListOf<File>()
+            // Basic safety and exclusion checks
+            if (!directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
+                continue
+            }
 
             try {
-                folderFile.listFiles()?.forEach { file ->
-                    if (file.isFile && isMediaFile(file)) {
-                        filesInFolder.add(file)
+                val files = directory.listFiles()
+                if (files != null) {
+                    // Check if the directory itself contains any files. If so, it's not a viable target.
+                    if (files.none { it.isFile }) {
+                        targetFolders.add(directory.absolutePath to directory.name)
+                    }
+
+                    // Add all subdirectories to the queue for traversal, regardless of the parent's status.
+                    files.filter { it.isDirectory }.forEach { queue.add(it) }
+                }
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "findViableTargetFolders: Failed to access directory: ${directory.path}", e)
+            }
+        }
+        return@withContext targetFolders
+    }
+
+    /**
+     * Performs a highly efficient, single-pass scan of the file system to discover all media
+     * folders and calculate their details simultaneously.
+     *
+     * @return A Pair containing the list of discovered [FolderDetails] and a flat list of all [File] objects found.
+     */
+    private suspend fun performSinglePassFileSystemScan(): Pair<List<FolderDetails>, List<File>> = withContext(Dispatchers.IO) {
+        val processedPaths = preferencesRepository.processedMediaPathsFlow.first()
+        val permanentlySortedFolders = preferencesRepository.permanentlySortedFoldersFlow.first()
+        val standardSystemDirectoryPaths = getStandardSystemDirectoryPaths()
+        val primarySystemPaths = getPrimarySystemDirectoryPaths()
+
+        // Map: Folder Path -> Pair(Mutable List of Files, isMediaFolder)
+        val folderContents = mutableMapOf<String, Pair<MutableList<File>, Boolean>>()
+        val allDiscoveredFiles = mutableListOf<File>()
+        val queue: Queue<File> = ArrayDeque()
+
+        Environment.getExternalStorageDirectory()?.let { queue.add(it) }
+
+        // Phase 1: Discover all files and categorize them by parent folder in a single traversal.
+        while (queue.isNotEmpty()) {
+            currentCoroutineContext().ensureActive()
+            val directory = queue.poll() ?: continue
+
+            if (directory.name == "To Edit" || !directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
+                continue
+            }
+
+            try {
+                val files = directory.listFiles()
+                if (files.isNullOrEmpty()) continue
+
+                for (file in files) {
+                    if (file.isDirectory) {
+                        queue.add(file)
+                    } else {
+                        val parentPath = file.parent ?: continue
+                        val entry = folderContents.getOrPut(parentPath) { Pair(mutableListOf(), false) }
+                        entry.first.add(file)
+                        // If we find even one media file, mark the folder as a media folder.
+                        if (!entry.second && isMediaFile(file)) {
+                            folderContents[parentPath] = entry.copy(second = true)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Failed to access directory during single-pass scan: ${directory.path}", e)
+            }
+        }
+
+        // Phase 2: Process the collected data into FolderDetails, filtering and calculating stats.
+        val folderDetailsList = mutableListOf<FolderDetails>()
+        folderContents.entries
+            .filter { it.value.second } // Only process folders that were marked as containing media.
+            .forEach { (folderPath, content) ->
+                if (folderPath in permanentlySortedFolders) return@forEach // Skip permanently sorted folders.
+
+                val folderFile = File(folderPath)
+                var itemCount = 0
+                var totalSize = 0L
+
+                content.first.forEach { file ->
+                    if (isMediaFile(file)) {
+                        allDiscoveredFiles.add(file)
                         if (file.absolutePath !in processedPaths) {
                             itemCount++
                             totalSize += file.length()
                         }
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(LOG_TAG, "Could not list files in $folderPath", e)
-                continue
-            }
 
-            if (filesInFolder.isNotEmpty()) {
-                allDiscoveredFiles.addAll(filesInFolder)
                 if (itemCount > 0) {
+                    val isSystem = folderPath in standardSystemDirectoryPaths || isConventionalSystemChildFolder(folderFile, standardSystemDirectoryPaths)
+                    val isPrimarySystem = folderPath in primarySystemPaths
                     folderDetailsList.add(
                         FolderDetails(
                             path = folderPath,
                             name = folderFile.name,
                             itemCount = itemCount,
                             totalSize = totalSize,
-                            isSystemFolder = false
+                            isSystemFolder = isSystem,
+                            isPrimarySystemFolder = isPrimarySystem
                         )
                     )
                 }
             }
-        }
-
-        val standardSystemDirectoryPaths = getStandardSystemDirectoryPaths()
-        val finalDetails = folderDetailsList.map { details ->
-            val folderFile = File(details.path)
-            val isSystem = details.path in standardSystemDirectoryPaths || isConventionalSystemChildFolder(
-                folderFile, standardSystemDirectoryPaths
-            )
-            details.copy(isSystemFolder = isSystem)
-        }
-        return@withContext Pair(finalDetails, allDiscoveredFiles)
+        return@withContext Pair(folderDetailsList, allDiscoveredFiles)
     }
 
     override suspend fun handleFolderRename(oldPath: String, newPath: String) = withContext(Dispatchers.IO) {
@@ -1071,13 +1072,16 @@ class DirectMediaRepositoryImpl @Inject constructor(
 
         if (itemCount > 0) {
             val standardSystemDirectoryPaths = getStandardSystemDirectoryPaths()
+            val primarySystemPaths = getPrimarySystemDirectoryPaths()
             val isSystem = folderPath in standardSystemDirectoryPaths || isConventionalSystemChildFolder(folderFile, standardSystemDirectoryPaths)
+            val isPrimarySystem = folderPath in primarySystemPaths
             val details = FolderDetails(
                 path = folderPath,
                 name = folderFile.name,
                 itemCount = itemCount,
                 totalSize = totalSize,
-                isSystemFolder = isSystem
+                isSystemFolder = isSystem,
+                isPrimarySystemFolder = isPrimarySystem
             )
             folderDetailsDao.upsert(details.toFolderDetailsCache())
         } else {
@@ -1107,6 +1111,32 @@ class DirectMediaRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             emptyList()
         }
+    }
+
+    private fun getPrimarySystemDirectoryPaths(): Set<String> {
+        val primarySystemRootPaths = setOf(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PODCASTS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_ALARMS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_NOTIFICATIONS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_AUDIOBOOKS)
+        ).mapNotNull { it?.absolutePath }.toSet()
+
+        val dcimDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+        val picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+
+        val primarySystemSubFolderPaths = setOf(
+            File(dcimDir, "Camera").absolutePath,
+            File(picturesDir, "Screenshots").absolutePath
+        )
+
+        return primarySystemRootPaths + primarySystemSubFolderPaths
     }
 
     private fun getStandardSystemDirectoryPaths(): Set<String> {
@@ -1238,13 +1268,19 @@ class DirectMediaRepositoryImpl @Inject constructor(
     }
 
 
-    private fun FolderDetailsCache.toFolderDetails(): FolderDetails = FolderDetails(
-        path = this.path,
-        name = this.name,
-        itemCount = this.itemCount,
-        totalSize = this.totalSize,
-        isSystemFolder = this.isSystemFolder
-    )
+    private fun FolderDetailsCache.toFolderDetails(): FolderDetails {
+        // This conversion is mainly for observers that might see data before a full scan enrichment.
+        // We perform the check here for completeness.
+        val primarySystemPaths = getPrimarySystemDirectoryPaths()
+        return FolderDetails(
+            path = this.path,
+            name = this.name,
+            itemCount = this.itemCount,
+            totalSize = this.totalSize,
+            isSystemFolder = this.isSystemFolder,
+            isPrimarySystemFolder = this.path in primarySystemPaths
+        )
+    }
 
     private fun FolderDetails.toFolderDetailsCache(): FolderDetailsCache = FolderDetailsCache(
         path = this.path,
@@ -1255,96 +1291,12 @@ class DirectMediaRepositoryImpl @Inject constructor(
     )
 
     override fun observeAllFolders(): Flow<List<Pair<String, String>>> {
-        val isFullScanInitiated = AtomicBoolean(false)
-        if (isFullScanInitiated.compareAndSet(false, true)) {
-            externalScope.launch {
-                Log.d("CacheDebug", "Initiating full background folder scan.")
-                scanForAndCacheAllFolders()
-            }
-        }
-
+        // The complete, unified list from the single source of truth.
         return folderDetailsDao.getAll().map { cacheList ->
-            cacheList.map { it.path to it.name }
+            cacheList
+                .map { it.path to it.name }
+                .distinctBy { it.first }
                 .sortedBy { it.second.lowercase() }
-        }
-    }
-
-    private suspend fun scanForAllMediaFoldersRecursively(): Set<String> = withContext(Dispatchers.IO) {
-        val mediaFolders = mutableSetOf<String>()
-        val queue: Queue<File> = ArrayDeque()
-
-        Environment.getExternalStorageDirectory()?.let { queue.add(it) }
-
-        while (queue.isNotEmpty()) {
-            currentCoroutineContext().ensureActive()
-            val directory = queue.poll() ?: continue
-
-            if (directory.name == "To Edit" || !directory.exists() || !directory.canRead() || directory.name.startsWith(".") || !isSafeDestination(directory.absolutePath)) {
-                continue
-            }
-
-            try {
-                val files = directory.listFiles()
-                if (files.isNullOrEmpty()) continue
-
-                var containsMedia = false
-                val subdirectories = mutableListOf<File>()
-
-                for (file in files) {
-                    if (file.isDirectory) {
-                        subdirectories.add(file)
-                    } else if (!containsMedia && isMediaFile(file)) {
-                        containsMedia = true
-                    }
-                }
-
-                if (containsMedia) {
-                    mediaFolders.add(directory.absolutePath)
-                }
-
-                queue.addAll(subdirectories)
-
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "Failed to access directory: ${directory.path}", e)
-            }
-        }
-        return@withContext mediaFolders
-    }
-
-    private suspend fun scanForAndCacheAllFolders() = withContext(Dispatchers.IO) {
-        val allMediaFolders = scanForAllMediaFoldersRecursively()
-        Log.d("CacheDebug", "Found ${allMediaFolders.size} media folders from direct scan.")
-
-        lastKnownFolderState = allMediaFolders
-
-        val cachedFolders = folderDetailsDao.getAll().first()
-        val cachedFolderPaths = cachedFolders.map { it.path }.toSet()
-        Log.d("CacheDebug", "Found ${cachedFolderPaths.size} folders in DB cache.")
-
-        val newFolderPaths = allMediaFolders - cachedFolderPaths
-        val deletedFolderPaths = cachedFolderPaths - allMediaFolders
-
-        if (newFolderPaths.isNotEmpty()) {
-            Log.d("CacheDebug", "Adding ${newFolderPaths.size} new folders to cache.")
-            val newCacheEntries = newFolderPaths.map { path ->
-                FolderDetailsCache(
-                    path = path,
-                    name = File(path).name,
-                    itemCount = 0,
-                    totalSize = 0L,
-                    isSystemFolder = false
-                )
-            }
-            folderDetailsDao.upsertAll(newCacheEntries)
-        }
-
-        if (deletedFolderPaths.isNotEmpty()) {
-            Log.d("CacheDebug", "Deleting ${deletedFolderPaths.size} stale folders from cache.")
-            folderDetailsDao.deleteByPath(deletedFolderPaths.toList())
-        }
-
-        if (newFolderPaths.isEmpty() && deletedFolderPaths.isEmpty()) {
-            Log.d("CacheDebug", "Folder cache is already up-to-date.")
         }
     }
 

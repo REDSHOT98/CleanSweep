@@ -22,10 +22,10 @@ import com.cleansweep.domain.repository.MediaRepository
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,7 +38,8 @@ data class FolderSearchState(
     val browsePath: String? = null,
     val displayedResults: List<String> = emptyList(),
     val isLoading: Boolean = false,
-    val isPreFilteredMode: Boolean = false
+    val isPreFilteredMode: Boolean = false,
+    val allFolders: List<Pair<String, String>> = emptyList()
 )
 
 @ViewModelScoped
@@ -48,159 +49,109 @@ class FolderSearchManager @Inject constructor(
     private val _state = MutableStateFlow(FolderSearchState())
     val state: StateFlow<FolderSearchState> = _state.asStateFlow()
 
-    private var folderCollectionJob: Job? = null
-    private var allFoldersFromRepo: List<Pair<String, String>> = emptyList()
-    private var preFilteredList: List<Pair<String, String>> = emptyList()
     private val calculationContext = Dispatchers.Default
 
     private fun calculateResults(
-        sourceList: List<Pair<String, String>>,
         query: String,
         browsePath: String?,
+        sourceFolders: List<Pair<String, String>>,
         isPreFiltered: Boolean
     ): List<String> {
         val results = if (query.isNotBlank()) {
-            sourceList.filter { (path, name) ->
+            sourceFolders.filter { (path, name) ->
                 name.contains(query, ignoreCase = true) || path.contains(query, ignoreCase = true)
             }
         } else if (!browsePath.isNullOrBlank()) {
-            sourceList.filter { (path, _) ->
-                File(path).parent.equals(browsePath, ignoreCase = true)
+            sourceFolders.filter { (path, _) ->
+                // Check if the item's path is a direct child of the browsePath
+                val parentDir = File(path).parent
+                parentDir?.equals(browsePath, ignoreCase = true) == true
             }
         } else {
+            // Display root folders when not browsing or searching
             if (isPreFiltered) {
-                sourceList
+                sourceFolders
             } else {
-                val allPaths = sourceList.map { it.first }.toSet()
-                sourceList.filter { (path, _) ->
+                val allPaths = sourceFolders.map { it.first }.toSet()
+                sourceFolders.filter { (path, _) ->
                     val parent = File(path).parent
                     parent == null || !allPaths.contains(parent)
                 }
             }
         }
-        return results.map { it.first }.sorted()
+        return results.map { it.first }.sortedBy { it.lowercase() }
     }
 
-    suspend fun prepareForSearch(
+    fun prepareForSearch(
         initialPath: String?,
         coroutineScope: CoroutineScope,
-        excludedFolders: Set<String> = emptySet(),
-        includePermanentlySorted: Boolean = false
+        excludedFolders: Set<String> = emptySet()
     ) {
-        folderCollectionJob?.cancel()
-        this.preFilteredList = emptyList()
+        coroutineScope.launch {
+            _state.update { it.copy(isLoading = true, isPreFilteredMode = false) }
 
-        // Fetch one or both lists based on the context.
-        val cachedFolders = mediaRepository.getCachedFolderSnapshot()
-        val permanentlySortedFolders = if (includePermanentlySorted) {
-            mediaRepository.getFoldersWithProcessedMedia()
-        } else {
-            emptyList()
-        }
-        // Combine and deduplicate.
-        val combinedFolders = (cachedFolders + permanentlySortedFolders).distinctBy { it.first }
+            // Fetch the complete, fresh list of folders just once from the single source of truth.
+            val allFolders = mediaRepository.observeAllFolders().first()
+            val availableFolders = allFolders.filterNot { it.first in excludedFolders }
 
-        val availableCachedFolders = combinedFolders.filterNot { it.first in excludedFolders }
-        allFoldersFromRepo = availableCachedFolders
+            val initialResults = withContext(calculationContext) {
+                calculateResults(
+                    query = "",
+                    browsePath = initialPath,
+                    sourceFolders = availableFolders,
+                    isPreFiltered = false
+                )
+            }
 
-        // Calculate initial results from the cache.
-        val initialResults = calculateResults(
-            sourceList = availableCachedFolders,
-            query = "", // Initial search query is empty
-            browsePath = initialPath,
-            isPreFiltered = false
-        )
-
-        _state.value = FolderSearchState(
-            browsePath = initialPath,
-            isPreFilteredMode = false,
-            isLoading = false,
-            displayedResults = initialResults
-        )
-
-        // Then, observe for live updates in the background.
-        folderCollectionJob = coroutineScope.launch {
-            // This still observes the main flow, which is correct. The initial snapshot
-            // gives us the full list, and subsequent updates from the main flow
-            // (e.g., a new folder is created) will still be caught here.
-            mediaRepository.observeAllFolders().collect { folders ->
-                val availableFolders = folders.filterNot { it.first in excludedFolders }
-                updateSourceFolders(availableFolders)
+            _state.update {
+                it.copy(
+                    browsePath = initialPath,
+                    isLoading = false,
+                    displayedResults = initialResults,
+                    allFolders = availableFolders
+                )
             }
         }
     }
 
+
     fun prepareWithPreFilteredList(
         folders: List<Pair<String, String>>,
-        initialPath: String? = null,
-        excludedFolders: Set<String> = emptySet()
+        initialPath: String? = null
     ) {
-        folderCollectionJob?.cancel()
-        val availableFolders = folders.filterNot { it.first in excludedFolders }
-        this.preFilteredList = availableFolders
-        this.allFoldersFromRepo = emptyList()
-
-        val initialResults = calculateResults(
-            sourceList = availableFolders,
-            query = "",
-            browsePath = initialPath,
-            isPreFiltered = true
-        )
-
-        _state.value = FolderSearchState(
-            browsePath = initialPath,
-            isPreFilteredMode = true,
-            isLoading = false,
-            displayedResults = initialResults
-        )
-    }
-
-    /**
-     * Safely updates the source list of folders without resetting the user's current
-     * search or browse state. This is used to feed new data from background flows
-     * without causing UI flickers or state resets.
-     */
-    fun updateSourceFolders(newFolders: List<Pair<String, String>>) {
-        val currentState = _state.value
-        if (currentState.isPreFilteredMode) {
-            this.preFilteredList = newFolders
-        } else {
-            this.allFoldersFromRepo = newFolders
-        }
-
         _state.update {
             it.copy(
+                browsePath = initialPath,
+                isPreFilteredMode = true,
+                isLoading = false,
                 displayedResults = calculateResults(
-                    sourceList = newFolders,
-                    query = it.searchQuery,
-                    browsePath = it.browsePath,
-                    isPreFiltered = it.isPreFilteredMode
-                )
+                    query = "",
+                    browsePath = initialPath,
+                    sourceFolders = folders,
+                    isPreFiltered = true
+                ),
+                allFolders = folders
             )
         }
     }
 
-
     fun updateSearchQuery(query: String) {
-        val currentState = _state.value
-        val sourceList = if (currentState.isPreFilteredMode) preFilteredList else allFoldersFromRepo
-        _state.value = currentState.copy(
-            searchQuery = query,
-            displayedResults = calculateResults(sourceList, query, currentState.browsePath, currentState.isPreFilteredMode)
-        )
+        _state.update { currentState ->
+            currentState.copy(
+                searchQuery = query,
+                // Do not nullify browsePath. Preserve it during search.
+                displayedResults = calculateResults(query, currentState.browsePath, currentState.allFolders, currentState.isPreFilteredMode)
+            )
+        }
     }
 
-    suspend fun selectPath(path: String) {
-        withContext(calculationContext) {
-            val currentState = _state.value
-            val sourceList = if (currentState.isPreFilteredMode) preFilteredList else allFoldersFromRepo
-            _state.update {
-                it.copy(
-                    browsePath = path,
-                    searchQuery = "",
-                    displayedResults = calculateResults(sourceList, "", path, it.isPreFilteredMode)
-                )
-            }
+    fun selectPath(path: String) {
+        _state.update { currentState ->
+            currentState.copy(
+                browsePath = path,
+                searchQuery = "",
+                displayedResults = calculateResults("", path, currentState.allFolders, currentState.isPreFilteredMode)
+            )
         }
     }
 
@@ -211,10 +162,22 @@ class FolderSearchManager @Inject constructor(
         }
     }
 
+    fun revertSearchIfEmpty() {
+        _state.update { currentState ->
+            // Only revert if a search is active AND it has yielded no results.
+            if (currentState.searchQuery.isNotBlank() && currentState.displayedResults.isEmpty()) {
+                currentState.copy(
+                    searchQuery = "", // Clear the query
+                    // Recalculate results based on the preserved browsePath
+                    displayedResults = calculateResults("", currentState.browsePath, currentState.allFolders, currentState.isPreFilteredMode)
+                )
+            } else {
+                currentState // No change needed
+            }
+        }
+    }
+
     fun reset() {
-        folderCollectionJob?.cancel()
-        this.preFilteredList = emptyList()
-        this.allFoldersFromRepo = emptyList()
         _state.value = FolderSearchState()
     }
 }

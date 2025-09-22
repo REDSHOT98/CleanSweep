@@ -19,6 +19,7 @@ package com.cleansweep.data.db.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import com.cleansweep.data.db.entity.FolderDetailsCache
 import kotlinx.coroutines.flow.Flow
@@ -42,4 +43,10 @@ interface FolderDetailsDao {
 
     @Query("DELETE FROM folder_details_cache")
     suspend fun clear()
+
+    @Transaction
+    suspend fun replaceAll(folders: List<FolderDetailsCache>) {
+        clear()
+        upsertAll(folders)
+    }
 }
