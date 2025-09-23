@@ -1018,7 +1018,7 @@ class SettingsViewModel @Inject constructor(
                 duplicateScanExcludeList.value
             }
             folderSearchManager.prepareForSearch(
-                initialPath = null,
+                initialPath = defaultAlbumCreationPath.value.ifBlank { null },
                 coroutineScope = viewModelScope,
                 excludedFolders = currentList
             )
