@@ -670,27 +670,20 @@ fun SettingsScreen(
                                 onClick = { showAboutSortMediaDialog = true }
                             )
                         },
-                        SettingContent(keywords = listOf("gitlab", "source code")) {
+                        SettingContent(keywords = listOf("github", "source code")) {
+                            val uriHandler = LocalUriHandler.current
+                            SettingsItem(
+                                title = "GitHub",
+                                summary = "github.com/LoopOtto/CleanSweep",
+                                onClick = { uriHandler.openUri("https://github.com/LoopOtto/CleanSweep") }
+                            )
+                        },
+                        SettingContent(keywords = listOf("gitlab", "source code", "mirror")) {
                             val uriHandler = LocalUriHandler.current
                             SettingsItem(
                                 title = "GitLab",
-                                summary = "gitlab.com/LoopOtto/CleanSweep",
+                                summary = "gitlab.com/LoopOtto/CleanSweep (read-only mirror)",
                                 onClick = { uriHandler.openUri("https://gitlab.com/LoopOtto/cleansweep") }
-                            )
-                        },
-                        SettingContent(keywords = listOf("github", "suspension", "source code")) {
-                            SettingsItem(
-                                title = buildAnnotatedString {
-                                    withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                                        append("GitHub")
-                                    }
-                                },
-                                summary = buildAnnotatedString {
-                                    withStyle(style = SpanStyle(textDecoration = TextDecoration.LineThrough)) {
-                                        append("github.com/LoopOtto/CleanSweep")
-                                    }
-                                },
-                                onClick = viewModel::showGitHubSuspensionDialog
                             )
                         },
                         SettingContent(keywords = listOf("open-source licenses", "libraries")) {
@@ -785,10 +778,6 @@ fun SettingsScreen(
                 }
             }
         )
-    }
-
-    if (uiState.showGitHubSuspensionDialog) {
-        GitHubSuspensionDialog(onDismiss = viewModel::dismissGitHubSuspensionDialog)
     }
 
     if (uiState.showDuplicateScanScopeDialog) {
@@ -977,20 +966,6 @@ fun SettingsScreen(
             }
         )
     }
-}
-
-@Composable
-private fun GitHubSuspensionDialog(onDismiss: () -> Unit) {
-    AppDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("About GitHub...") },
-        text = { Text("We moved to GitLab because of a random and unjustified suspension on GitHub. We're hoping for a reply to our appeal and a formal explanation.") },
-        buttons = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        }
-    )
 }
 
 private fun formatPathForDisplay(path: String): Pair<String, String> {

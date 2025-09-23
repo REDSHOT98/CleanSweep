@@ -87,8 +87,7 @@ data class SettingsUiState(
     val searchQuery: String = "",
     val showDuplicateScanScopeDialog: Boolean = false,
     val showDuplicateScanScopeFolderSearch: Boolean = false,
-    val isSearchingForIncludeList: Boolean = true,
-    val showGitHubSuspensionDialog: Boolean = false
+    val isSearchingForIncludeList: Boolean = true
 )
 
 @OptIn(FlowPreview::class)
@@ -1054,14 +1053,5 @@ class SettingsViewModel @Inject constructor(
                 preferencesRepository.setDuplicateScanExcludeList(newList)
             }
         }
-    }
-
-    // --- GitHub Suspension Dialog ---
-    fun showGitHubSuspensionDialog() {
-        _uiState.update { it.copy(showGitHubSuspensionDialog = true) }
-    }
-
-    fun dismissGitHubSuspensionDialog() {
-        _uiState.update { it.copy(showGitHubSuspensionDialog = false) }
     }
 }
