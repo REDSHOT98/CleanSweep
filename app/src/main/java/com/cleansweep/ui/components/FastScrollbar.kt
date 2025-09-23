@@ -18,6 +18,7 @@
 package com.cleansweep.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -80,8 +81,14 @@ private fun FastScrollbarInternal(
         val thumbHeightDp = maxHeight * renderInfo.thumbSize
 
         val scrollableDistPx = trackHeightPx - with(density) { thumbHeightDp.toPx() }
-        val thumbYPx = renderInfo.scrollBias * scrollableDistPx
-        val thumbYDp = with(density) { thumbYPx.toDp() }
+        val targetThumbYPx = renderInfo.scrollBias * scrollableDistPx
+
+        val animatedThumbYPx by animateFloatAsState(
+            targetValue = targetThumbYPx,
+            animationSpec = spring(),
+            label = "ScrollbarPosition"
+        )
+        val thumbYDp = with(density) { animatedThumbYPx.toDp() }
 
         Box(
             modifier = Modifier

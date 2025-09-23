@@ -1356,7 +1356,7 @@ class SwiperViewModel @Inject constructor(
             val originalItemToRestoreId = changeToRevert.item.id
             val restoredItemIndex = currentState.allMediaItems.indexOfFirst { it.id == originalItemToRestoreId }
             val currentSwiperIndex = currentState.currentIndex
-            val shouldKeepSheetOpen = updatedPendingChanges.isNotEmpty()
+            val shouldKeepSheetOpen = currentState.showSummarySheet && updatedPendingChanges.isNotEmpty()
 
             var finalState = currentState.copy(
                 pendingChanges = updatedPendingChanges,

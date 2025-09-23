@@ -96,6 +96,10 @@ fun SessionSetupScreen(
         viewModel.exitContextualSelectionMode()
     }
 
+    BackHandler(enabled = uiState.searchQuery.isNotEmpty() && !uiState.isContextualSelectionMode) {
+        viewModel.updateSearchQuery("")
+    }
+
     // Handle toast messages
     LaunchedEffect(uiState.toastMessage) {
         uiState.toastMessage?.let {
