@@ -4,10 +4,10 @@ Thank you for your interest in contributing to CleanSweep! We're excited to have
 
 ## How to Contribute
 
-The best way to contribute is by getting involved in the discussion. All feature proposals and bug reports should start as a GitLab Issue.
+The best way to contribute is by getting involved in the discussion. All feature proposals and bug reports should start as a GitHub Issue.
 
--   **Found a Bug?** [Open a Bug Report](https://gitlab.com/LoopOtto/cleansweep/-/issues/new?issue[title]=%5BBUG%5D%20&issuable_template=bug). Please be as detailed as possible, including your device model, Android version, and steps to reproduce the issue.
--   **Have a Feature Idea?** [Propose a New Feature](https://gitlab.com/LoopOtto/cleansweep/-/issues/new?issue[title]=%5BFEAT%5D%20&issuable_template=feature). Explain the problem you're trying to solve and how your proposed feature would address it.
+-   **Found a Bug?** [Open a Bug Report](https://github.com/LoopOtto/cleansweep/issues/new?template=bug_report.md&title=%5BBUG%5D%20). Please be as detailed as possible, including your device model, Android version, and steps to reproduce the issue.
+-   **Have a Feature Idea?** [Propose a New Feature](https://github.com/LoopOtto/cleansweep/issues/new?template=feature_request.md&title=%5BFEAT%5D%20). Explain the problem you're trying to solve and how your proposed feature would address it.
 
 Please search the existing issues before creating a new one to avoid duplicates.
 
@@ -15,9 +15,9 @@ Please search the existing issues before creating a new one to avoid duplicates.
 
 To maintain project quality and clarity, we follow a structured development process:
 
-1.  **Proposal (Issue):** Every change starts with a GitLab Issue. This is where the problem or feature is defined and discussed. This step prevents wasted effort on a change that might not align with the project's goals.
+1.  **Proposal (Issue):** Every change starts with a GitHub Issue. This is where the problem or feature is defined and discussed. This step prevents wasted effort on a change that might not align with the project's goals.
 2.  **Discussion & Approval:** The project maintainers will review the issue. For new features, when needed, we will discuss the proposed solution and agree on a high-level plan before any code is written.
-3.  **Implementation (Merge Request):** Once the plan is approved, you can begin implementation. Create a Merge Request (MR) and link it to the original issue. Please keep MRs focused on a single issue.
+3.  **Implementation (Pull Request):** Once the plan is approved, you can begin implementation. Create a Pull Request (PR) and link it to the original issue. Please keep PRs focused on a single issue.
 
 ## Architectural & Coding Standards
 
@@ -68,13 +68,13 @@ fun MyComponent(
 }
 ```
 
-## Submitting a Merge Request
+## Submitting a Pull Request
 
-When your changes are ready, please submit a Merge Request with the following:
+When your changes are ready, please submit a Pull Request with the following:
 
 -   A clear title that summarizes the change (e.g., `[FEAT] Add folder exclusion to duplicate scan`).
 -   A description explaining *what* the change is and *why* it's being made.
--   A link to the GitLab Issue it resolves (e.g., `Closes #123`).
+-   A link to the GitHub Issue it resolves (e.g., `Closes #123`).
 -   Ensure your code is formatted according to the project's existing style.
 
 Thank you for helping make CleanSweep a better app!

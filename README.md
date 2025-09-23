@@ -1,7 +1,7 @@
 # CleanSweep
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://gitlab.com/LoopOtto/cleansweep/-/blob/main/LICENSE)
-[![GitLab Issues](https://img.shields.io/gitlab/issues/open/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/issues)
-[![GitLab Release](https://img.shields.io/gitlab/v/release/74596361)](https://gitlab.com/LoopOtto/cleansweep/-/releases)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/LoopOtto/cleansweep)](https://github.com/LoopOtto/cleansweep/issues)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/LoopOtto/cleansweep)](https://github.com/LoopOtto/cleansweep/releases)
 
 **Tired of a cluttered photo gallery? Get organized with a swipe!**
 
@@ -51,7 +51,7 @@ We take your privacy seriously. CleanSweep is designed from the ground up to res
 ## Getting Started
 
 1.  **Requirements:** You'll need a device running **Android 10 or newer**.
-2.  **Installation:** Download the latest release from the [Releases page](https://gitlab.com/LoopOtto/cleansweep/-/tags).
+2.  **Installation:** Download the latest release from the [Releases page](https://github.com/LoopOtto/cleansweep/releases).
 3.  **Onboarding:** The first time you open CleanSweep, a helpful tutorial will walk you through all the features and gestures.
 
 ## Permissions Explained
