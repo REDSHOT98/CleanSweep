@@ -130,6 +130,7 @@ fun SwiperScreen(
     windowSizeClass: WindowSizeClass,
     bucketIds: List<String>,
     onNavigateUp: () -> Unit,
+    onNavigateUpAndReset: () -> Unit,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToDuplicates: () -> Unit = {},
     viewModel: SwiperViewModel = hiltViewModel()
@@ -153,7 +154,11 @@ fun SwiperScreen(
     val scope = rememberCoroutineScope()
 
     BackHandler {
-        viewModel.onNavigateUp()
+        if (uiState.isSortingComplete && uiState.pendingChanges.isEmpty()) {
+            onNavigateUpAndReset()
+        } else {
+            viewModel.onNavigateUp()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -437,7 +442,7 @@ fun SwiperScreen(
                 uiState.isSortingComplete && uiState.pendingChanges.isEmpty() -> {
                     val rememberProcessedMedia by viewModel.rememberProcessedMedia.collectAsState()
                     AlreadyOrganizedDialog(
-                        onSelectNewFolders = onNavigateUp,
+                        onSelectNewFolders = onNavigateUpAndReset,
                         showResetHistoryButton = rememberProcessedMedia,
                         onResetHistory = viewModel::resetProcessedMedia,
                         onResetSingleFolderHistory = viewModel::showForgetMediaInFolderDialog,

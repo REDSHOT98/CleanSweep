@@ -20,8 +20,11 @@ package com.cleansweep.ui.navigation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -46,6 +49,7 @@ import java.nio.charset.StandardCharsets
 // A constant for the new nested graph route.
 const val DUPLICATES_GRAPH_ROUTE = "duplicates_graph"
 private const val DEEP_LINK_URI_BASE = "app://com.cleansweep"
+const val RESET_SEARCH_RESULT_KEY = "reset_search_result"
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
@@ -107,8 +111,20 @@ fun AppNavigation(
                 type = NavType.BoolType
                 defaultValue = false
             })
-        ) {
+        ) { backStackEntry ->
             val viewModel = hiltViewModel<SessionSetupViewModel>()
+
+            val result by backStackEntry
+                .savedStateHandle
+                .getStateFlow(RESET_SEARCH_RESULT_KEY, false)
+                .collectAsStateWithLifecycle()
+
+            LaunchedEffect(result) {
+                if (result) {
+                    viewModel.handleResetResult()
+                }
+            }
+
             SessionSetupScreen(
                 windowSizeClass = windowSizeClass,
                 onStartSession = { bucketIds ->
@@ -140,6 +156,12 @@ fun AppNavigation(
                 windowSizeClass = windowSizeClass,
                 bucketIds = bucketIds,
                 onNavigateUp = { navController.navigateUp() },
+                onNavigateUpAndReset = {
+                    navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.set(RESET_SEARCH_RESULT_KEY, true)
+                    navController.popBackStack()
+                },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onNavigateToDuplicates = { navController.navigate(DUPLICATES_GRAPH_ROUTE) }
             )

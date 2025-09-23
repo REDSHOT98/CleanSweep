@@ -28,6 +28,7 @@ import com.cleansweep.domain.bus.FolderUpdateEventBus
 import com.cleansweep.domain.model.FolderDetails
 import com.cleansweep.domain.repository.MediaRepository
 import com.cleansweep.ui.components.FolderSearchManager
+import com.cleansweep.ui.navigation.RESET_SEARCH_RESULT_KEY
 import com.cleansweep.util.FileOperationsHelper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.NonCancellable
@@ -162,6 +163,15 @@ class SessionSetupViewModel @Inject constructor(
             observeRefreshStates()
             observeFolderUpdates()
         }
+    }
+
+    fun handleResetResult() {
+        if (_uiState.value.searchQuery.isNotEmpty()) {
+            Log.d(TAG, "Reset result received. Clearing search query.")
+            updateSearchQuery("")
+        }
+        // Consume the result
+        savedStateHandle[RESET_SEARCH_RESULT_KEY] = false
     }
 
     private fun observeRefreshStates() {
