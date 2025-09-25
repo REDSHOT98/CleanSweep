@@ -41,6 +41,8 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.*
@@ -90,6 +92,7 @@ fun SessionSetupScreen(
     val searchAutofocusEnabled by viewModel.searchAutofocusEnabled.collectAsState()
     val context = LocalContext.current
     val isExpandedScreen = windowSizeClass.widthSizeClass > WindowWidthSizeClass.Compact
+    val pullToRefreshState = rememberPullToRefreshState()
     val TAG = "SessionSetupScreen"
 
     BackHandler(enabled = uiState.isContextualSelectionMode) {
@@ -314,7 +317,23 @@ fun SessionSetupScreen(
             PullToRefreshBox(
                 isRefreshing = uiState.isRefreshing,
                 onRefresh = viewModel::refreshFolders,
-                modifier = Modifier.fillMaxSize()
+                state = pullToRefreshState,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {
+                    PullToRefreshDefaults.Indicator(
+                        state = pullToRefreshState,
+                        isRefreshing = uiState.isRefreshing,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .then(
+                                if (LocalAppTheme.current == AppTheme.AMOLED) {
+                                    Modifier.padding(top = 16.dp)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                    )
+                }
             ) {
                 when {
                     // Case 1: Initial load, show the scanning message (true first launch/app's data deletion).

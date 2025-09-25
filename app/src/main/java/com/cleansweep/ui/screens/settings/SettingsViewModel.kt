@@ -87,7 +87,9 @@ data class SettingsUiState(
     val searchQuery: String = "",
     val showDuplicateScanScopeDialog: Boolean = false,
     val showDuplicateScanScopeFolderSearch: Boolean = false,
-    val isSearchingForIncludeList: Boolean = true
+    val isSearchingForIncludeList: Boolean = true,
+    val unindexedFilePaths: List<String> = emptyList(),
+    val showUnindexedFilesDialog: Boolean = false,
 )
 
 @OptIn(FlowPreview::class)
@@ -952,7 +954,7 @@ class SettingsViewModel @Inject constructor(
 
     fun refreshIndexingStatus() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isIndexingStatusLoading = true, indexingStatus = null) }
+            _uiState.update { it.copy(isIndexingStatusLoading = true, indexingStatus = null, unindexedFilePaths = emptyList()) }
             val status = mediaRepository.getIndexingStatus()
             val unindexedPaths = mediaRepository.getUnindexedMediaPaths()
             val unindexedHidden = unindexedPaths.count { path -> HiddenFileFilter.toBeHidden(path.substringAfterLast('/')) }
@@ -966,7 +968,8 @@ class SettingsViewModel @Inject constructor(
                         total = status.total,
                         unindexedUserFiles = unindexedUser,
                         unindexedHiddenFiles = unindexedHidden
-                    )
+                    ),
+                    unindexedFilePaths = unindexedPaths
                 )
             }
         }
@@ -984,6 +987,16 @@ class SettingsViewModel @Inject constructor(
             refreshIndexingStatus() // Refresh status after scan
             _uiState.update { it.copy(isIndexing = false) }
         }
+    }
+
+    fun showUnindexedFilesDialog() {
+        if (_uiState.value.unindexedFilePaths.isNotEmpty()) {
+            _uiState.update { it.copy(showUnindexedFilesDialog = true) }
+        }
+    }
+
+    fun dismissUnindexedFilesDialog() {
+        _uiState.update { it.copy(showUnindexedFilesDialog = false) }
     }
 
 

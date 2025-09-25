@@ -585,7 +585,8 @@ fun SettingsScreen(
                                 isStatusLoading = uiState.isIndexingStatusLoading,
                                 isScanning = uiState.isIndexing,
                                 onRefresh = viewModel::refreshIndexingStatus,
-                                onScan = viewModel::triggerFullScan
+                                onScan = viewModel::triggerFullScan,
+                                onViewFiles = viewModel::showUnindexedFilesDialog
                             )
                         },
                         SettingContent(keywords = listOf("export target favorites", "save", "backup")) {
@@ -757,6 +758,13 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (uiState.showUnindexedFilesDialog) {
+        UnindexedFilesDialog(
+            filePaths = uiState.unindexedFilePaths,
+            onDismiss = viewModel::dismissUnindexedFilesDialog
+        )
     }
 
     if (uiState.showAccentColorDialog) {
@@ -1027,12 +1035,53 @@ private fun DuplicateScanScopeManagementDialog(
 }
 
 @Composable
+private fun UnindexedFilesDialog(
+    filePaths: List<String>,
+    onDismiss: () -> Unit
+) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Unindexed Media Files") },
+        text = {
+            if (filePaths.isEmpty()) {
+                Text("No unindexed files found.")
+            } else {
+                LazyColumn(modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)) {
+                    item {
+                        Text(
+                            "These files are on your device but are not known to the MediaStore. Scanning will add them.",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    items(filePaths) { path ->
+                        Text(
+                            text = ".../${path.takeLast(40)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        },
+        buttons = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
+}
+
+@Composable
 private fun MediaIndexingStatusItem(
     status: DetailedIndexingStatus?,
     isStatusLoading: Boolean,
     isScanning: Boolean,
     onRefresh: () -> Unit,
-    onScan: () -> Unit
+    onScan: () -> Unit,
+    onViewFiles: () -> Unit
 ) {
     val statusText = when {
         isScanning -> "Scanning for unindexed media..."
@@ -1063,8 +1112,21 @@ private fun MediaIndexingStatusItem(
             Column {
                 Text(statusText)
                 if (supportingText != null) {
+                    val hasUnindexedFiles = status != null && status.total > status.indexed
+                    val clickableModifier = if (hasUnindexedFiles) {
+                        Modifier.clickable { onViewFiles() }
+                    } else {
+                        Modifier
+                    }
+                    val textColor = if(hasUnindexedFiles) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+
                     Spacer(Modifier.height(4.dp))
-                    Text(supportingText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        supportingText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textColor,
+                        modifier = clickableModifier
+                    )
                 }
             }
         },
@@ -1076,15 +1138,17 @@ private fun MediaIndexingStatusItem(
             }
         },
         trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onRefresh, enabled = !isScanning && !isStatusLoading) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh Status")
-                }
-                AnimatedVisibility(visible = status != null && status.total > status.indexed, enter = fadeIn(), exit = fadeOut()) {
-                    OutlinedButton(onClick = onScan, enabled = !isScanning && !isStatusLoading) {
-                        Text("Scan Now")
+            IconButton(
+                onClick = {
+                    if (status != null && status.total > status.indexed) {
+                        onScan()
+                    } else {
+                        onRefresh()
                     }
-                }
+                },
+                enabled = !isScanning && !isStatusLoading
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh Status / Scan Now")
             }
         },
         modifier = Modifier.padding(vertical = 8.dp)
