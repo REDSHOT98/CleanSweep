@@ -156,6 +156,7 @@ fun DuplicatesScreen(
     if (uiState.showUnscannableFilesDialog) {
         UnscannableFilesDialog(
             filePaths = displayedUnscannableFiles,
+            totalUnscannableCount = uiState.unscannableFiles.size,
             showHidden = uiState.showHiddenUnscannableFiles,
             onToggleShowHidden = viewModel::toggleShowHiddenUnscannableFiles,
             onDismiss = viewModel::hideUnscannableFiles
@@ -903,13 +904,14 @@ private fun UnscannableFilesSummaryCard(
                 )
                 Spacer(Modifier.width(12.dp))
                 Column {
+                    val fileText = if (count == 1) "file" else "files"
                     Text(
-                        text = "$count files could not be read",
+                        text = "$count $fileText could not be read",
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
                     Text(
-                        text = "These files might be corrupt or inaccessible. Tap for details.",
+                        text = "These might be corrupt or inaccessible. Tap for details.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer
                     )
@@ -935,6 +937,7 @@ private fun UnscannableFilesSummaryCard(
 @Composable
 private fun UnscannableFilesDialog(
     filePaths: List<String>,
+    totalUnscannableCount: Int,
     showHidden: Boolean,
     onToggleShowHidden: () -> Unit,
     onDismiss: () -> Unit
@@ -948,8 +951,16 @@ private fun UnscannableFilesDialog(
         title = { Text("Unreadable Files") },
         text = {
             Column {
-                if (filePaths.isEmpty()) {
-                    Text("All hidden and temporary files have been filtered. Toggle the switch below to see them.")
+                if (filePaths.isEmpty() && totalUnscannableCount > 0) {
+                    Text(
+                        text = "No unreadable user files found. This is the ideal state. Any remaining files are likely hidden system or temporary files, which can be viewed with the toggle below.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else if (filePaths.isEmpty()) {
+                    Text(
+                        text = "No unreadable files were found on your device.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
                 LazyColumn(
                     modifier = Modifier
@@ -967,8 +978,10 @@ private fun UnscannableFilesDialog(
                             HorizontalDivider()
                         }
                         items(files) { filePath ->
+                            val file = File(filePath)
+                            val formattedPath = "${file.parentFile?.name ?: "..."}/${file.name}"
                             Text(
-                                text = "• ${File(filePath).name}",
+                                text = formattedPath,
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
                             )
@@ -1031,10 +1044,10 @@ private fun ListView(
                 }
             }
 
-            if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
+            if (uiState.showUnscannableSummaryCard) {
                 item {
                     UnscannableFilesSummaryCard(
-                        count = uiState.unscannableFiles.size,
+                        count = uiState.nonHiddenUnscannableFilesCount,
                         onClick = onShowUnscannableFiles,
                         onDismiss = onDismissUnscannableSummary
                     )
@@ -1152,10 +1165,10 @@ private fun GridView(
                                 )
                             }
                         }
-                        if (uiState.showUnscannableSummaryCard && uiState.unscannableFiles.isNotEmpty()) {
+                        if (uiState.showUnscannableSummaryCard) {
                             Box(modifier = Modifier.padding(bottom = 8.dp, start = 8.dp, end = 8.dp)) {
                                 UnscannableFilesSummaryCard(
-                                    count = uiState.unscannableFiles.size,
+                                    count = uiState.nonHiddenUnscannableFilesCount,
                                     onClick = onShowUnscannableFiles,
                                     onDismiss = onDismissUnscannableSummary
                                 )

@@ -90,6 +90,7 @@ data class SettingsUiState(
     val isSearchingForIncludeList: Boolean = true,
     val unindexedFilePaths: List<String> = emptyList(),
     val showUnindexedFilesDialog: Boolean = false,
+    val showHiddenUnindexedFiles: Boolean = false
 )
 
 @OptIn(FlowPreview::class)
@@ -113,6 +114,14 @@ class SettingsViewModel @Inject constructor(
             .debounce(200L)
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
+    val displayedUnindexedFiles: StateFlow<List<String>> = uiState.map { state ->
+        if (state.showHiddenUnindexedFiles) {
+            state.unindexedFilePaths
+        } else {
+            state.unindexedFilePaths.filterNot { HiddenFileFilter.isUiHidden(it) }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val currentTheme: StateFlow<AppTheme> = preferencesRepository.themeFlow
         .stateIn(
@@ -957,7 +966,7 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(isIndexingStatusLoading = true, indexingStatus = null, unindexedFilePaths = emptyList()) }
             val status = mediaRepository.getIndexingStatus()
             val unindexedPaths = mediaRepository.getUnindexedMediaPaths()
-            val unindexedHidden = unindexedPaths.count { path -> HiddenFileFilter.toBeHidden(path.substringAfterLast('/')) }
+            val unindexedHidden = unindexedPaths.count { path -> HiddenFileFilter.isUiHidden(path) }
             val unindexedUser = unindexedPaths.size - unindexedHidden
 
             _uiState.update {
@@ -996,7 +1005,11 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun dismissUnindexedFilesDialog() {
-        _uiState.update { it.copy(showUnindexedFilesDialog = false) }
+        _uiState.update { it.copy(showUnindexedFilesDialog = false, showHiddenUnindexedFiles = false) }
+    }
+
+    fun toggleShowHiddenUnindexedFiles() {
+        _uiState.update { it.copy(showHiddenUnindexedFiles = !it.showHiddenUnindexedFiles) }
     }
 
 

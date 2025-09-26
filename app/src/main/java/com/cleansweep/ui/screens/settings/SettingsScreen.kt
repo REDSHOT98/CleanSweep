@@ -154,6 +154,7 @@ fun SettingsScreen(
     val debouncedSearchQuery by viewModel.debouncedSearchQuery.collectAsState()
     val scope = rememberCoroutineScope()
     val folderSearchState by viewModel.folderSearchManager.state.collectAsState()
+    val displayedUnindexedFiles by viewModel.displayedUnindexedFiles.collectAsState()
     val currentTheme by viewModel.currentTheme.collectAsState()
     val useDynamicColors by viewModel.useDynamicColors.collectAsState()
     val accentColorKey by viewModel.accentColorKey.collectAsState()
@@ -762,7 +763,10 @@ fun SettingsScreen(
 
     if (uiState.showUnindexedFilesDialog) {
         UnindexedFilesDialog(
-            filePaths = uiState.unindexedFilePaths,
+            filePaths = displayedUnindexedFiles,
+            totalUnindexedCount = uiState.unindexedFilePaths.size,
+            showHidden = uiState.showHiddenUnindexedFiles,
+            onToggleShowHidden = viewModel::toggleShowHiddenUnindexedFiles,
             onDismiss = viewModel::dismissUnindexedFilesDialog
         )
     }
@@ -999,7 +1003,9 @@ private fun DuplicateScanScopeManagementDialog(
             if (folderList.isEmpty()) {
                 Text("No folders have been added to this list. The scan will run as if this setting were disabled.")
             } else {
-                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 350.dp)) {
+                LazyColumn(modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)) {
                     items(folderList) { path ->
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -1037,32 +1043,82 @@ private fun DuplicateScanScopeManagementDialog(
 @Composable
 private fun UnindexedFilesDialog(
     filePaths: List<String>,
+    totalUnindexedCount: Int,
+    showHidden: Boolean,
+    onToggleShowHidden: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val groupedFiles = remember(filePaths) {
+        filePaths.groupBy { File(it).parent ?: "Unknown Location" }
+    }
+
     AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Unindexed Media Files") },
         text = {
-            if (filePaths.isEmpty()) {
-                Text("No unindexed files found.")
-            } else {
-                LazyColumn(modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 350.dp)) {
-                    item {
-                        Text(
-                            "These files are on your device but are not known to the MediaStore. Scanning will add them.",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+            Column {
+                if (filePaths.isEmpty() && totalUnindexedCount > 0) {
+                    Text(
+                        text = "No unindexed user files found. This is the ideal state. Any remaining files are likely hidden system or temporary files, which can be viewed with the toggle below.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else if (filePaths.isEmpty()) {
+                    Text(
+                        text = "No unindexed files were found on your device.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                if (filePaths.isNotEmpty()) {
+                    LazyColumn(modifier = Modifier
+                        .weight(1f, fill = false)
+                        .fillMaxWidth()
+                        .heightIn(max = 350.dp)) {
+                        item {
+                            val descriptionText = if (showHidden) {
+                                "These files are on your device but are not known by the MediaStore. These will never be indexed by the MediaStore by design."
+                            } else {
+                                "These files are on your device but are not known by the MediaStore. Maybe scanning will index them."
+                            }
+                            Text(
+                                text = descriptionText,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+                        groupedFiles.forEach { (directory, files) ->
+                            item {
+                                Text(
+                                    text = directory,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                                )
+                                HorizontalDivider()
+                            }
+                            items(files) { filePath ->
+                                val file = File(filePath)
+                                val formattedPath = "${file.parentFile?.name ?: "..."}/${file.name}"
+                                Text(
+                                    text = formattedPath,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(start = 8.dp, top = 2.dp, bottom = 2.dp)
+                                )
+                            }
+                        }
                     }
-                    items(filePaths) { path ->
-                        Text(
-                            text = ".../${path.takeLast(40)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onToggleShowHidden)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = showHidden, onCheckedChange = { onToggleShowHidden() })
+                    Text("Show hidden/temporary files")
                 }
             }
         },

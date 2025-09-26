@@ -4,6 +4,7 @@
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
+
  * the Free Software Foundation, either version 3 of the License, or any later version.
  *
  * This program is distributed in the hope that it will be useful,
@@ -74,6 +75,7 @@ data class DuplicatesUiState(
     val scanProgressPhase: String? = null,
     val resultGroups: List<ScanResultGroup> = emptyList(),
     val unscannableFiles: List<String> = emptyList(),
+    val nonHiddenUnscannableFilesCount: Int = 0,
     val showUnscannableFilesDialog: Boolean = false,
     val showHiddenUnscannableFiles: Boolean = false,
     val showUnscannableSummaryCard: Boolean = true,
@@ -126,7 +128,7 @@ class DuplicatesViewModel @Inject constructor(
         if (state.showHiddenUnscannableFiles) {
             state.unscannableFiles
         } else {
-            state.unscannableFiles.filterNot { HiddenFileFilter.toBeHidden(File(it).name) }
+            state.unscannableFiles.filterNot { HiddenFileFilter.isUiHidden(it) }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -210,6 +212,7 @@ class DuplicatesViewModel @Inject constructor(
                     }
                     BackgroundScanState.Complete -> {
                         val hadSelections = _uiState.value.selectedForDeletion.isNotEmpty()
+                        val nonHiddenUnscannableCount = backgroundState.unscannableFiles.count { path -> !HiddenFileFilter.isPathExcludedFromScan(path) }
 
                         // Both timestamp and scopeType must be present for the state to be valid.
                         if (backgroundState.timestamp != null && backgroundState.scanScopeType != null) {
@@ -218,7 +221,8 @@ class DuplicatesViewModel @Inject constructor(
                                     scanState = ScanState.Complete,
                                     resultGroups = backgroundState.results,
                                     unscannableFiles = backgroundState.unscannableFiles,
-                                    showUnscannableSummaryCard = backgroundState.unscannableFiles.isNotEmpty(),
+                                    nonHiddenUnscannableFilesCount = nonHiddenUnscannableCount,
+                                    showUnscannableSummaryCard = nonHiddenUnscannableCount > 0,
                                     scanProgress = 1f,
                                     scanProgressPhase = backgroundState.progressPhase,
                                     staleResultsInfo = StaleResultsInfo(
@@ -264,12 +268,14 @@ class DuplicatesViewModel @Inject constructor(
             val results = validatedCache ?: duplicatesRepository.loadLatestScanResults()
             if (results != null) {
                 validatedCache = results
+                val nonHiddenUnscannableCount = results.unscannableFiles.count { path -> !HiddenFileFilter.isPathExcludedFromScan(path) }
                 _uiState.update {
                     it.copy(
                         scanState = ScanState.Complete,
                         resultGroups = results.groups,
                         unscannableFiles = results.unscannableFiles,
-                        showUnscannableSummaryCard = results.unscannableFiles.isNotEmpty(),
+                        nonHiddenUnscannableFilesCount = nonHiddenUnscannableCount,
+                        showUnscannableSummaryCard = nonHiddenUnscannableCount > 0,
                         scanProgress = if (isFallback) 0f else 1f,
                         scanProgressPhase = if (isFallback) null else "Complete",
                         staleResultsInfo = StaleResultsInfo(
@@ -297,12 +303,14 @@ class DuplicatesViewModel @Inject constructor(
             val results = validatedCache ?: duplicatesRepository.loadLatestScanResults()
             if (results != null) {
                 validatedCache = results
+                val nonHiddenUnscannableCount = results.unscannableFiles.count { path -> !HiddenFileFilter.isPathExcludedFromScan(path) }
                 _uiState.update {
                     it.copy(
                         // Crucially, DO NOT change the scanState
                         resultGroups = results.groups,
                         unscannableFiles = results.unscannableFiles,
-                        showUnscannableSummaryCard = results.unscannableFiles.isNotEmpty(),
+                        nonHiddenUnscannableFilesCount = nonHiddenUnscannableCount,
+                        showUnscannableSummaryCard = nonHiddenUnscannableCount > 0,
                         staleResultsInfo = StaleResultsInfo(
                             timestamp = results.timestamp,
                             scopeType = results.scopeType

@@ -50,6 +50,18 @@ object HiddenFileFilter {
     }
 
     /**
+     * A comprehensive check to determine if a file should be hidden from the user in UI lists.
+     * Combines both the scan exclusion logic (for paths like /.thumbnails/) and the
+     * specific filename logic (for files like -12345.jpg).
+     *
+     * @param path The full file path to check.
+     * @return `true` if the file should be considered hidden in the UI, `false` otherwise.
+     */
+    fun isUiHidden(path: String): Boolean {
+        return isPathExcludedFromScan(path) || toBeHidden(path.substringAfterLast('/'))
+    }
+
+    /**
      * Filters a list of file paths, returning only those that are not considered
      * "normally hidden" system files based on their filename. Used for UI filtering.
      *
